@@ -165,7 +165,9 @@ void unblockClient(client *c) {
         c->btype == BLOCKED_STREAM) {
         unblockClientWaitingData(c);
     } else if (c->btype == BLOCKED_WAIT) {
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         unblockClientWaitingReplicas(c);
+#endif
     } else if (c->btype == BLOCKED_MODULE) {
         unblockClientFromModule(c);
     } else {
@@ -604,5 +606,3 @@ void signalKeyAsReady(redisDb *db, robj *key) {
     incrRefCount(key);
     serverAssert(dictAdd(db->ready_keys,key,NULL) == DICT_OK);
 }
-
-

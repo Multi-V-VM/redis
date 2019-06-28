@@ -34,6 +34,12 @@
 #include "bio.h"
 #include "atomicvar.h"
 
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#endif
+
 /* ----------------------------------------------------------------------------
  * Data structures
  * --------------------------------------------------------------------------*/
@@ -351,6 +357,7 @@ unsigned long LFUDecrAndReturn(robj *o) {
  * returns the sum of AOF and slaves buffer. */
 size_t freeMemoryGetNotCountedMemory(void) {
     size_t overhead = 0;
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     int slaves = listLength(server.slaves);
 
     if (slaves) {
@@ -366,6 +373,7 @@ size_t freeMemoryGetNotCountedMemory(void) {
     if (server.aof_state != AOF_OFF) {
         overhead += sdsalloc(server.aof_buf)+aofRewriteBufferSize();
     }
+#endif
     return overhead;
 }
 
@@ -446,17 +454,25 @@ int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *lev
 int freeMemoryIfNeeded(void) {
     /* By default replicas should ignore maxmemory
      * and just be masters exact copies. */
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (server.masterhost && server.repl_slave_ignore_maxmemory) return C_OK;
+#endif
 
     size_t mem_reported, mem_tofree, mem_freed;
     mstime_t latency, eviction_latency;
     long long delta;
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     int slaves = listLength(server.slaves);
+#else
+    int slaves = 0;
+#endif
 
     /* When clients are paused the dataset should be static not just from the
      * POV of clients not being able to write, but also from the POV of
      * expires and evictions of keys not being performed. */
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (clientsArePaused()) return C_OK;
+#endif
     if (getMaxmemoryState(&mem_reported,NULL,&mem_tofree,NULL) == C_OK)
         return C_OK;
 
@@ -564,10 +580,14 @@ int freeMemoryIfNeeded(void) {
              * we only care about memory used by the key space. */
             delta = (long long) zmalloc_used_memory();
             latencyStartMonitor(eviction_latency);
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
             if (server.lazyfree_lazy_eviction)
                 dbAsyncDelete(db,keyobj);
             else
                 dbSyncDelete(db,keyobj);
+#else
+            dbSyncDelete(db,keyobj);
+#endif
             latencyEndMonitor(eviction_latency);
             latencyAddSampleIfNeeded("eviction-del",eviction_latency);
             latencyRemoveNestedEvent(latency,eviction_latency);
@@ -583,7 +603,9 @@ int freeMemoryIfNeeded(void) {
              * start spending so much time here that is impossible to
              * deliver data to the slaves fast enough, so we force the
              * transmission here inside the loop. */
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
             if (slaves) flushSlavesOutputBuffers();
+#endif
 
             /* Normally our stop condition is the ability to release
              * a fixed, pre-computed amount of memory. However when we
@@ -611,6 +633,7 @@ int freeMemoryIfNeeded(void) {
     return C_OK;
 
 cant_free:
+#if __redis_unmodified_upstream // Disable the lazy memory freeing
     /* We are here if we are not able to reclaim memory. There is only one
      * last thing we can try: check if the lazyfree thread has jobs in queue
      * and wait... */
@@ -619,6 +642,7 @@ cant_free:
             break;
         usleep(1000);
     }
+#endif
     return C_ERR;
 }
 
@@ -630,6 +654,10 @@ cant_free:
  *
  */
 int freeMemoryIfNeededAndSafe(void) {
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.lua_timedout || server.loading) return C_OK;
+#else
+    if (server.lua_timedout) return C_OK;
+#endif
     return freeMemoryIfNeeded();
 }

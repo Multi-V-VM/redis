@@ -33,6 +33,12 @@
 
 #include <stdint.h>
 #include <math.h>
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#endif
 
 /* The Redis HyperLogLog implementation is based on the following ideas:
  *
@@ -1036,7 +1042,7 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
         z *= 0.5;
     }
     z += m * hllSigma(reghisto[0]/(double)m);
-    E = llroundl(HLL_ALPHA_INF*m*m/z);
+    E = lround(HLL_ALPHA_INF*m*m/z);
 
     return (uint64_t) E;
 }

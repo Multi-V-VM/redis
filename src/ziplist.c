@@ -1188,6 +1188,7 @@ size_t ziplistBlobLen(unsigned char *zl) {
 }
 
 void ziplistRepr(unsigned char *zl) {
+#if __redis_unmodified_upstream // Disable the debug printing of ziplist
     unsigned char *p;
     int index = 0;
     zlentry entry;
@@ -1243,6 +1244,7 @@ void ziplistRepr(unsigned char *zl) {
         index++;
     }
     printf("{end}\n\n");
+#endif
 }
 
 #ifdef REDIS_TEST

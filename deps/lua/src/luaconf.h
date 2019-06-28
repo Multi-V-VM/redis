@@ -617,11 +617,16 @@ union luai_Cast { double l_d; long l_l; };
 #define luai_jmpbuf	jmp_buf
 
 #else
+#if __redis_unmodified_upstream // Currently setjmp/longjump cannot be translated to Wasm
 /* default handling with long jumps */
 #define LUAI_THROW(L,c)	longjmp((c)->b, 1)
 #define LUAI_TRY(L,c,a)	if (setjmp((c)->b) == 0) { a }
 #define luai_jmpbuf	jmp_buf
-
+#else
+#define LUAI_THROW(L,c)
+#define LUAI_TRY(L,c,a)	{ a }
+#define luai_jmpbuf	int
+#endif
 #endif
 
 
@@ -653,7 +658,11 @@ union luai_Cast { double l_d; long l_l; };
 	e = (e == -1); }
 
 #else
+#if __redis_unmodified_upstream // Disable getting tmp folder
 #define LUA_TMPNAMBUFSIZE	L_tmpnam
+#else
+#define LUA_TMPNAMBUFSIZE	260
+#endif
 #define lua_tmpnam(b,e)		{ e = (tmpnam(b) == NULL); }
 #endif
 

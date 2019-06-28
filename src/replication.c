@@ -2010,12 +2010,14 @@ void replicationHandleMasterDisconnection(void) {
 }
 
 void replicaofCommand(client *c) {
-    /* SLAVEOF is not allowed in cluster mode as replication is automatically
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
+/* SLAVEOF is not allowed in cluster mode as replication is automatically
      * configured using the current address of the master node. */
     if (server.cluster_enabled) {
         addReplyError(c,"REPLICAOF not allowed in cluster mode.");
         return;
     }
+#endif
 
     /* The special host/port combination "NO" "ONE" turns the instance
      * into a master. Otherwise the new master address is set. */

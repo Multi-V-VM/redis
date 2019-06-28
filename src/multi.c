@@ -28,6 +28,10 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <string.h>
+#endif
 
 /* ================================ MULTI/EXEC ============================== */
 
@@ -139,6 +143,7 @@ void execCommand(client *c) {
         goto handle_monitor;
     }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* If there are write commands inside the transaction, and this is a read
      * only slave, we want to send an error. This happens when the transaction
      * was initiated when the instance was a master or a writable replica and
@@ -153,7 +158,7 @@ void execCommand(client *c) {
         discardTransaction(c);
         goto handle_monitor;
     }
-
+#endif
     /* Exec all the queued commands */
     unwatchAllKeys(c); /* Unwatch ASAP otherwise we'll waste CPU cycles */
     orig_argv = c->argv;
@@ -175,7 +180,11 @@ void execCommand(client *c) {
             must_propagate = 1;
         }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         call(c,server.loading ? CMD_CALL_NONE : CMD_CALL_FULL);
+#else
+        call(c, CMD_CALL_FULL);
+#endif
 
         /* Commands may alter argc/argv, restore mstate. */
         c->mstate.commands[j].argc = c->argc;
@@ -187,11 +196,13 @@ void execCommand(client *c) {
     c->cmd = orig_cmd;
     discardTransaction(c);
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Make sure the EXEC command will be propagated as well if MULTI
      * was already propagated. */
     if (must_propagate) {
         int is_master = server.masterhost == NULL;
         server.dirty++;
+
         /* If inside the MULTI/EXEC block this instance was suddenly
          * switched from master to slave (using the SLAVEOF command), the
          * initial MULTI was propagated into the replication backlog, but the
@@ -211,6 +222,10 @@ handle_monitor:
      * table, and we do it here with correct ordering. */
     if (listLength(server.monitors) && !server.loading)
         replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
+#else
+handle_monitor:
+    return;
+#endif
 }
 
 /* ===================== WATCH (CAS alike for MULTI/EXEC) ===================

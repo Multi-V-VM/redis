@@ -31,6 +31,13 @@
 #include "endianconv.h"
 #include "stream.h"
 
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#endif
+
 #define STREAM_BYTES_PER_LISTPACK 2048
 
 /* Every stream item inside the listpack, has a flags field that is used to
@@ -1251,10 +1258,12 @@ void xaddCommand(client *c) {
     rewriteClientCommandArgument(c,i,idarg);
     decrRefCount(idarg);
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* We need to signal to blocked clients that there is new data on this
      * stream. */
     if (server.blocked_clients_by_type[BLOCKED_STREAM])
         signalKeyAsReady(c->db, c->argv[1]);
+#endif
 }
 
 /* XRANGE/XREVRANGE actual implementation. */
@@ -1343,11 +1352,14 @@ void xreadCommand(client *c) {
     for (int i = 1; i < c->argc; i++) {
         int moreargs = c->argc-i-1;
         char *o = c->argv[i]->ptr;
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
         if (!strcasecmp(o,"BLOCK") && moreargs) {
             i++;
             if (getTimeoutFromObjectOrReply(c,c->argv[i],&timeout,
                 UNIT_MILLISECONDS) != C_OK) return;
-        } else if (!strcasecmp(o,"COUNT") && moreargs) {
+        } else
+#endif
+        if (!strcasecmp(o,"COUNT") && moreargs) {
             i++;
             if (getLongLongFromObjectOrReply(c,c->argv[i],&count,NULL) != C_OK)
                 return;
@@ -1536,6 +1548,7 @@ void xreadCommand(client *c) {
         goto cleanup;
     }
 
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
     /* Block if needed. */
     if (timeout != -1) {
         /* If we are inside a MULTI/EXEC and the list is empty the only thing
@@ -1567,6 +1580,7 @@ void xreadCommand(client *c) {
         }
         goto cleanup;
     }
+#endif
 
     /* No BLOCK option, nor any stream we can serve. Reply as with a
      * timeout happened. */

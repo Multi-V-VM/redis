@@ -30,6 +30,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if __redis_unmodified_upstream // Disable writing to files
 #include <stdio.h>
 #define D(...)                                                               \
     do {                                                                     \
@@ -39,3 +40,9 @@
         fprintf(fp,"\n");                                                    \
         fclose(fp);                                                          \
     } while (0);
+#else
+// TODO: add logs
+#define D(...)                                                               \
+    do {                                                                     \
+    } while (0);
+#endif

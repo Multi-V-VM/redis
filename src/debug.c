@@ -31,6 +31,7 @@
 #include "sha1.h"   /* SHA1 is used for DEBUG DIGEST */
 #include "crc64.h"
 
+#if __redis_unmodified_upstream // Disable the debug API of Redis
 #include <arpa/inet.h>
 #include <signal.h>
 #include <dlfcn.h>
@@ -353,7 +354,9 @@ NULL
     } else if (!strcasecmp(c->argv[1]->ptr,"log") && c->argc == 3) {
         serverLog(LL_WARNING, "DEBUG LOG: %s", (char*)c->argv[2]->ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp(c->argv[1]->ptr,"reload")) {
+    }
+#if __redis_unmodified_upstream // Disable the replication API of Redis
+    else if (!strcasecmp(c->argv[1]->ptr,"reload")) {
         rdbSaveInfo rsi, *rsiptr;
         rsiptr = rdbPopulateSaveInfo(&rsi);
         if (rdbSave(server.rdb_filename,rsiptr) != C_OK) {
@@ -383,7 +386,9 @@ NULL
         server.dirty = 0; /* Prevent AOF / replication */
         serverLog(LL_WARNING,"Append Only File loaded by DEBUG LOADAOF");
         addReply(c,shared.ok);
-    } else if (!strcasecmp(c->argv[1]->ptr,"object") && c->argc == 3) {
+    }
+#endif
+    else if (!strcasecmp(c->argv[1]->ptr,"object") && c->argc == 3) {
         dictEntry *de;
         robj *val;
         char *strenc;
@@ -427,7 +432,7 @@ NULL
             nextra += used;
             remaining -= used;
         }
-
+#if __redis_unmodified_upstream // Disable the replication API of Redis
         addReplyStatusFormat(c,
             "Value at:%p refcount:%d "
             "encoding:%s serializedlength:%zu "
@@ -435,6 +440,7 @@ NULL
             (void*)val, val->refcount,
             strenc, rdbSavedObjectLen(val),
             val->lru, estimateObjectIdleTime(val)/1000, extra);
+#endif
     } else if (!strcasecmp(c->argv[1]->ptr,"sdslen") && c->argc == 3) {
         dictEntry *de;
         robj *val;
@@ -543,12 +549,16 @@ NULL
     {
         server.active_expire_enabled = atoi(c->argv[2]->ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp(c->argv[1]->ptr,"lua-always-replicate-commands") &&
+    }
+#if __redis_unmodified_upstream // Disable the replication API of Redis
+    else if (!strcasecmp(c->argv[1]->ptr,"lua-always-replicate-commands") &&
                c->argc == 3)
     {
         server.lua_always_replicate_commands = atoi(c->argv[2]->ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp(c->argv[1]->ptr,"error") && c->argc == 3) {
+    }
+#endif
+    else if (!strcasecmp(c->argv[1]->ptr,"error") && c->argc == 3) {
         sds errstr = sdsnewlen("-",1);
 
         errstr = sdscatsds(errstr,c->argv[2]->ptr);
@@ -617,8 +627,10 @@ NULL
         }
     } else if (!strcasecmp(c->argv[1]->ptr,"change-repl-id") && c->argc == 2) {
         serverLog(LL_WARNING,"Changing replication IDs after receiving DEBUG change-repl-id");
+#if __redis_unmodified_upstream // Disable of replication API of Redis
         changeReplicationId();
         clearReplicationId2();
+#endif
         addReply(c,shared.ok);
     } else if (!strcasecmp(c->argv[1]->ptr,"stringmatch-test") && c->argc == 2)
     {
@@ -629,7 +641,10 @@ NULL
         return;
     }
 }
-
+#else
+#include <stdlib.h>
+#include <stdio.h>
+#endif
 /* =========================== Crash handling  ============================== */
 
 void _serverAssert(const char *estr, const char *file, int line) {
@@ -642,7 +657,11 @@ void _serverAssert(const char *estr, const char *file, int line) {
     server.assert_line = line;
     serverLog(LL_WARNING,"(forcing SIGSEGV to print the bug report.)");
 #endif
+#if __redis_unmodified_upstream // Use unreachable Wasm instructions instead of invalid pointer dereference
     *((char*)-1) = 'x';
+#else
+    __builtin_unreachable();
+#endif
 }
 
 void _serverAssertPrintClientInfo(const client *c) {
@@ -720,7 +739,11 @@ void _serverPanic(const char *file, int line, const char *msg, ...) {
     serverLog(LL_WARNING,"(forcing SIGSEGV in order to print the stack trace)");
 #endif
     serverLog(LL_WARNING,"------------------------------------------------");
+#if __redis_unmodified_upstream // Use unreachable Wasm instructions instead of invalid pointer dereference
     *((char*)-1) = 'x';
+#else
+    __builtin_unreachable();
+#endif
 }
 
 void bugReportStart(void) {
@@ -731,6 +754,7 @@ void bugReportStart(void) {
     }
 }
 
+#if __redis_unmodified_upstream // Disable the extended bugreport since there are no such capabilities in Wasm yet
 #ifdef HAVE_BACKTRACE
 static void *getMcontextEip(ucontext_t *uc) {
 #if defined(__APPLE__) && !defined(MAC_OS_X_VERSION_10_6)
@@ -1334,8 +1358,10 @@ void sigsegvHandler(int sig, siginfo_t *info, void *secret) {
 "  Suspect RAM error? Use redis-server --test-memory to verify it.\n\n"
 );
 
+#if __redis_unmodified_upstream // Disable the deamonization of Redis
     /* free(messages); Don't call free() with possibly corrupted memory. */
     if (server.daemonize && server.supervised == 0) unlink(server.pidfile);
+#endif
 
     /* Make sure we exit with the right signal at the end. So for instance
      * the core will be dumped if enabled. */
@@ -1444,3 +1470,4 @@ void disableWatchdog(void) {
     sigaction(SIGALRM, &act, NULL);
     server.watchdog_period = 0;
 }
+#endif

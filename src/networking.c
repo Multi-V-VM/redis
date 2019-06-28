@@ -29,9 +29,14 @@
 
 #include "server.h"
 #include "atomicvar.h"
+#if __redis_unmodified_upstream // Disable imports from uio.h and include some libs explicitly
 #include <sys/uio.h>
+#else
 #include <math.h>
 #include <ctype.h>
+#include <string.h>
+#include <stdio.h>
+#endif
 
 static void setProtocolError(const char *errstr, client *c);
 
@@ -85,6 +90,7 @@ void linkClient(client *c) {
 client *createClient(int fd) {
     client *c = zmalloc(sizeof(client));
 
+#if __redis_unmodified_upstream // Disable the net API of Redis
     /* passing -1 as fd it is possible to create a non connected client.
      * This is useful since all the commands needs to be executed
      * in the context of a client. When commands are executed in other
@@ -102,6 +108,7 @@ client *createClient(int fd) {
             return NULL;
         }
     }
+#endif
 
     selectDb(c,0);
     uint64_t client_id;
@@ -124,6 +131,7 @@ client *createClient(int fd) {
     c->flags = 0;
     c->ctime = c->lastinteraction = server.unixtime;
     c->authenticated = 0;
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     c->replstate = REPL_STATE_NONE;
     c->repl_put_online_on_ack = 0;
     c->reploff = 0;
@@ -133,6 +141,7 @@ client *createClient(int fd) {
     c->slave_listening_port = 0;
     c->slave_ip[0] = '\0';
     c->slave_capa = SLAVE_CAPA_NONE;
+#endif
     c->reply = listCreate();
     c->reply_bytes = 0;
     c->obuf_soft_limit_reached_time = 0;
@@ -147,7 +156,9 @@ client *createClient(int fd) {
     c->bpop.xread_group_noack = 0;
     c->bpop.numreplicas = 0;
     c->bpop.reploffset = 0;
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     c->woff = 0;
+#endif
     c->watched_keys = listCreate();
     c->pubsub_channels = dictCreate(&objectKeyPointerValueDictType,NULL);
     c->pubsub_patterns = listCreate();
@@ -160,6 +171,7 @@ client *createClient(int fd) {
     return c;
 }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* This funciton puts the client in the queue of clients that should write
  * their output buffers to the socket. Note that it does not *yet* install
  * the write handler, to start clients are put in a queue of clients that need
@@ -185,6 +197,7 @@ void clientInstallWriteHandler(client *c) {
         listAddNodeHead(server.clients_pending_write,c);
     }
 }
+#endif
 
 /* This function is called every time we are going to transmit new data
  * to the client. The behavior is the following:
@@ -209,6 +222,7 @@ void clientInstallWriteHandler(client *c) {
  * data to the clients output buffers. If the function returns C_ERR no
  * data should be appended to the output buffers. */
 int prepareClientToWrite(client *c) {
+#if __redis_unmodified_upstream // Client has to be able to write output
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
     if (c->flags & (CLIENT_LUA|CLIENT_MODULE)) return C_OK;
@@ -226,6 +240,7 @@ int prepareClientToWrite(client *c) {
     /* Schedule the client to write the output buffers to the socket, unless
      * it should already be setup to do so (it has already pending data). */
     if (!clientHasPendingReplies(c)) clientInstallWriteHandler(c);
+#endif
 
     /* Authorize the caller to queue in the output buffer of this client. */
     return C_OK;
@@ -295,6 +310,7 @@ void _addReplyStringToList(client *c, const char *s, size_t len) {
 
 /* Add the object 'obj' string representation to the client output buffer. */
 void addReply(client *c, robj *obj) {
+
     if (prepareClientToWrite(c) != C_OK) return;
 
     if (sdsEncodedObject(obj)) {
@@ -337,7 +353,7 @@ void addReplySds(client *c, sds s) {
 void addReplyString(client *c, const char *s, size_t len) {
     if (prepareClientToWrite(c) != C_OK) return;
     if (_addReplyToBuffer(c,s,len) != C_OK)
-        _addReplyStringToList(c,s,len);
+        _addReplyStringToList(c, s, len);
 }
 
 /* Low level function called by the addReplyError...() functions.
@@ -471,6 +487,7 @@ void setDeferredMultiBulkLength(client *c, void *node, long length) {
 void addReplyDouble(client *c, double d) {
     char dbuf[128], sbuf[128];
     int dlen, slen;
+
     if (isinf(d)) {
         /* Libc in odd systems (Hi Solaris!) will format infinite in a
          * different way, so better to handle it in an explicit way. */
@@ -646,6 +663,7 @@ int clientHasPendingReplies(client *c) {
     return c->bufpos || listLength(c->reply);
 }
 
+#if __redis_unmodified_upstream // Disable the net API of Redis
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags, char *ip) {
     client *c;
@@ -755,8 +773,9 @@ void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         acceptCommonHandler(cfd,CLIENT_UNIX_SOCKET,NULL);
     }
 }
+#endif
 
-static void freeClientArgv(client *c) {
+void freeClientArgv(client *c) {
     int j;
     for (j = 0; j < c->argc; j++)
         decrRefCount(c->argv[j]);
@@ -764,6 +783,7 @@ static void freeClientArgv(client *c) {
     c->cmd = NULL;
 }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
 /* Close all the slaves connections. This is useful in chained replication
  * when we resync with our own master and want to force all our slaves to
  * resync with us as well. */
@@ -773,6 +793,7 @@ void disconnectSlaves(void) {
         freeClient((client*)ln->value);
     }
 }
+#endif
 
 /* Remove the specified client from global lists where the client could
  * be referenced, not including the Pub/Sub channels.
@@ -783,6 +804,7 @@ void unlinkClient(client *c) {
     /* If this is marked as current client unset it. */
     if (server.current_client == c) server.current_client = NULL;
 
+#if __redis_unmodified_upstream // Disable the net API of Redis
     /* Certain operations must be done only if the client has an active socket.
      * If the client was already unlinked or if it's a "fake client" the
      * fd is already set to -1. */
@@ -809,6 +831,7 @@ void unlinkClient(client *c) {
         listDelNode(server.clients_pending_write,ln);
         c->flags &= ~CLIENT_PENDING_WRITE;
     }
+#endif
 
     /* When client was just unblocked because of a blocking operation,
      * remove it from the list of unblocked clients. */
@@ -821,6 +844,7 @@ void unlinkClient(client *c) {
 }
 
 void freeClient(client *c) {
+#if __redis_unmodified_upstream // Disable client freeing
     listNode *ln;
 
     /* If a client is protected, yet we need to free it right now, make sure
@@ -918,19 +942,22 @@ void freeClient(client *c) {
     freeClientMultiState(c);
     sdsfree(c->peerid);
     zfree(c);
+#endif
 }
-
 /* Schedule a client to free it at a safe time in the serverCron() function.
  * This function is useful when we need to terminate a client but we are in
  * a context where calling freeClient() is not possible, because the client
  * should be valid for the continuation of the flow of the program. */
 void freeClientAsync(client *c) {
+#if __redis_unmodified_upstream // Disable client freeing
     if (c->flags & CLIENT_CLOSE_ASAP || c->flags & CLIENT_LUA) return;
     c->flags |= CLIENT_CLOSE_ASAP;
     listAddNodeTail(server.clients_to_close,c);
+#endif
 }
 
 void freeClientsInAsyncFreeQueue(void) {
+#if __redis_unmodified_upstream // Disable client freeing
     while (listLength(server.clients_to_close)) {
         listNode *ln = listFirst(server.clients_to_close);
         client *c = listNodeValue(ln);
@@ -939,6 +966,7 @@ void freeClientsInAsyncFreeQueue(void) {
         freeClient(c);
         listDelNode(server.clients_to_close,ln);
     }
+#endif
 }
 
 /* Return a client by ID, or NULL if the client ID is not in the set
@@ -950,6 +978,7 @@ client *lookupClientByID(uint64_t id) {
     return (c == raxNotFound) ? NULL : c;
 }
 
+#if __redis_unmodified_upstream // Disable the net API of Redis
 /* Write data in output buffers to client. Return C_OK if the client
  * is still valid after the call, C_ERR if it was freed. */
 int writeToClient(int fd, client *c, int handler_installed) {
@@ -1082,6 +1111,7 @@ int handleClientsWithPendingWrites(void) {
              * so that in the middle of receiving the query, and serving it
              * to the client, we'll call beforeSleep() that will do the
              * actual fsync of AOF to disk. AE_BARRIER ensures that. */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
             if (server.aof_state == AOF_ON &&
                 server.aof_fsync == AOF_FSYNC_ALWAYS)
             {
@@ -1092,10 +1122,12 @@ int handleClientsWithPendingWrites(void) {
             {
                     freeClientAsync(c);
             }
+#endif
         }
     }
     return processed;
 }
+#endif
 
 /* resetClient prepare the client to process the next command */
 void resetClient(client *c) {
@@ -1106,10 +1138,12 @@ void resetClient(client *c) {
     c->multibulklen = 0;
     c->bulklen = -1;
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* We clear the ASKING flag as well if we are not inside a MULTI, and
      * if what we just executed is not the ASKING command itself. */
     if (!(c->flags & CLIENT_MULTI) && prevcmd != askingCommand)
         c->flags &= ~CLIENT_ASKING;
+#endif
 
     /* Remove the CLIENT_REPLY_SKIP flag if any so that the reply
      * to the next command will be sent, but set the flag if the command
@@ -1121,6 +1155,7 @@ void resetClient(client *c) {
     }
 }
 
+#if __redis_unmodified_upstream // Disable the event engine and net API of Redis
 /* This funciton is used when we want to re-enter the event loop but there
  * is the risk that the client we are dealing with will be freed in some
  * way. This happens for instance in:
@@ -1145,9 +1180,12 @@ void unprotectClient(client *c) {
     if (c->flags & CLIENT_PROTECTED) {
         c->flags &= ~CLIENT_PROTECTED;
         aeCreateFileEvent(server.el,c->fd,AE_READABLE,readQueryFromClient,c);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         if (clientHasPendingReplies(c)) clientInstallWriteHandler(c);
+#endif
     }
 }
+#endif
 
 /* Like processMultibulkBuffer(), but for the inline protocol instead of RESP,
  * this function consumes the client query buffer and creates a command ready
@@ -1189,11 +1227,13 @@ int processInlineBuffer(client *c) {
         return C_ERR;
     }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* Newline from slaves can be used to refresh the last ACK time.
      * This is useful for a slave to ping back while loading a big
      * RDB file. */
     if (querylen == 0 && c->flags & CLIENT_SLAVE)
         c->repl_ack_time = server.unixtime;
+#endif
 
     /* Move querybuffer position to the next query in the buffer. */
     c->qb_pos += querylen+linefeed_chars;
@@ -1402,6 +1442,7 @@ void processInputBuffer(client *c) {
 
     /* Keep processing while there is something in the input buffer */
     while(c->qb_pos < sdslen(c->querybuf)) {
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         /* Return if clients are paused. */
         if (!(c->flags & CLIENT_SLAVE) && clientsArePaused()) break;
 
@@ -1413,6 +1454,7 @@ void processInputBuffer(client *c) {
          * stream (instead of replying -BUSY like we do with other clients) and
          * later resume the processing. */
         if (server.lua_timedout && c->flags & CLIENT_MASTER) break;
+#endif
 
         /* CLIENT_CLOSE_AFTER_REPLY closes the connection once the reply is
          * written to the client. Make sure to not let the reply grow after
@@ -1444,6 +1486,8 @@ void processInputBuffer(client *c) {
         } else {
             /* Only reset the client when the command was executed. */
             if (processCommand(c) == C_OK) {
+                // TODO: check the interconnection between CLIENT_MULTI and reploff
+#if __redis_unmodified_upstream // Disable the replication API of Redis
                 if (c->flags & CLIENT_MASTER && !(c->flags & CLIENT_MULTI)) {
                     /* Update the applied replication offset of our master. */
                     c->reploff = c->read_reploff - sdslen(c->querybuf) + c->qb_pos;
@@ -1455,6 +1499,7 @@ void processInputBuffer(client *c) {
                  * The client will be reset in unblockClientFromModule(). */
                 if (!(c->flags & CLIENT_BLOCKED) || c->btype != BLOCKED_MODULE)
                     resetClient(c);
+#endif
             }
             /* freeMemoryIfNeeded may flush slave output buffers. This may
              * result into a slave, that may be the active client, to be
@@ -1472,6 +1517,7 @@ void processInputBuffer(client *c) {
     server.current_client = NULL;
 }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* This is a wrapper for processInputBuffer that also cares about handling
  * the replication forwarding to the sub-slaves, in case the client 'c'
  * is flagged as master. Usually you want to call this instead of the
@@ -1490,14 +1536,21 @@ void processInputBufferAndReplicate(client *c) {
         }
     }
 }
+#endif
 
+#if __redis_unmodified_upstream // Disable the event engine of Redis
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
     int nread, readlen;
     size_t qblen;
     UNUSED(el);
     UNUSED(mask);
-
+#else
+void readQueryFromClient(client *c, int mask, const char *request, int req_length) {
+    int nread, readlen;
+    size_t qblen;
+    UNUSED(mask);
+#endif
     readlen = PROTO_IOBUF_LEN;
     /* If this is a multi bulk request, and we are processing a bulk reply
      * that is large enough, try to maximize the probability that the query
@@ -1518,6 +1571,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+#if __redis_unmodified_upstream // Disable the net API of Redis
     nread = read(fd, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (errno == EAGAIN) {
@@ -1538,11 +1592,23 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         c->pending_querybuf = sdscatlen(c->pending_querybuf,
                                         c->querybuf+qblen,nread);
     }
+#else
+    nread = readlen < req_length ? readlen : req_length;
+    memcpy(c->querybuf+qblen, request, nread);
+#endif
 
     sdsIncrLen(c->querybuf,nread);
     c->lastinteraction = server.unixtime;
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (c->flags & CLIENT_MASTER) c->read_reploff += nread;
+#endif
     server.stat_net_input_bytes += nread;
+
+#if __redis_unmodified_upstream // Add some additional logging
+#else
+    serverLog(1, "readlen = %d, req_length = %d, nread = %d, server.client_max_querybuf_len = %zu, sdslen(c->querybuf) = %zu\n", readlen, req_length, nread, server.client_max_querybuf_len, sdslen(c->querybuf));
+#endif
+
     if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
         sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
 
@@ -1554,6 +1620,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         return;
     }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* Time to process the buffer. If the client is a master we need to
      * compute the difference between the applied offset before and after
      * processing the buffer, to understand how much of the replication stream
@@ -1561,6 +1628,9 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * corresponding part of the replication stream, will be propagated to
      * the sub-slaves and to the replication backlog. */
     processInputBufferAndReplicate(c);
+#else
+    processInputBuffer(c);
+#endif
 }
 
 void getClientsMaxBuffers(unsigned long *longest_output_list,
@@ -1581,6 +1651,7 @@ void getClientsMaxBuffers(unsigned long *longest_output_list,
     *biggest_input_buffer = bib;
 }
 
+#if __redis_unmodified_upstream // Disable the net API of Redis
 /* A Redis "Peer ID" is a colon separated ip:port pair.
  * For IPv4 it's in the form x.y.z.k:port, example: "127.0.0.1:1234".
  * For IPv6 addresses we use [] around the IP part, like in "[::1]:1234".
@@ -1602,6 +1673,7 @@ void genClientPeerId(client *client, char *peerid,
         anetFormatPeer(client->fd,peerid,peerid_len);
     }
 }
+#endif
 
 /* This function returns the client peer id, by creating and caching it
  * if client->peerid is NULL, otherwise returning the cached value.
@@ -1611,7 +1683,15 @@ char *getClientPeerId(client *c) {
     char peerid[NET_PEER_ID_LEN];
 
     if (c->peerid == NULL) {
+#if __redis_unmodified_upstream // Disable the net API of Redis
         genClientPeerId(c,peerid,sizeof(peerid));
+#else
+        peerid[0] = 'W';
+        peerid[1] = 'a';
+        peerid[2] = 's';
+        peerid[3] = 'm';
+        peerid[4] = '\x00';
+#endif
         c->peerid = sdsnew(peerid);
     }
     return c->peerid;
@@ -1643,15 +1723,16 @@ sds catClientInfoString(sds s, client *client) {
     if (p == flags) *p++ = 'N';
     *p++ = '\0';
 
+#if __redis_unmodified_upstream // Disable the event engine of Redis
     emask = client->fd == -1 ? 0 : aeGetFileEvents(server.el,client->fd);
     p = events;
     if (emask & AE_READABLE) *p++ = 'r';
     if (emask & AE_WRITABLE) *p++ = 'w';
+#endif
     *p = '\0';
     return sdscatfmt(s,
-        "id=%U addr=%s fd=%i name=%s age=%I idle=%I flags=%s db=%i sub=%i psub=%i multi=%i qbuf=%U qbuf-free=%U obl=%U oll=%U omem=%U events=%s cmd=%s",
+        "id=%U fd=%i name=%s age=%I idle=%I flags=%s db=%i sub=%i psub=%i multi=%i qbuf=%U qbuf-free=%U obl=%U oll=%U omem=%U events=%s cmd=%s",
         (unsigned long long) client->id,
-        getClientPeerId(client),
         client->fd,
         client->name ? (char*)client->name->ptr : "",
         (long long)(server.unixtime - client->ctime),
@@ -1686,6 +1767,7 @@ sds getAllClientsInfoString(int type) {
     return o;
 }
 
+#if __redis_unmodified_upstream // Disable client command
 void clientCommand(client *c) {
     listNode *ln;
     listIter li;
@@ -1861,6 +1943,7 @@ NULL
         } else {
             addReply(c,shared.czero);
         }
+        addReply(c,shared.czero);
     } else if (!strcasecmp(c->argv[1]->ptr,"setname") && c->argc == 3) {
         int j, len = sdslen(c->argv[2]->ptr);
         char *p = c->argv[2]->ptr;
@@ -1905,7 +1988,9 @@ NULL
         addReplyErrorFormat(c, "Unknown subcommand or wrong number of arguments for '%s'. Try CLIENT HELP", (char*)c->argv[1]->ptr);
     }
 }
+#endif
 
+#if __redis_unmodified_upstream // Disable the securityWarning command
 /* This callback is bound to POST and "Host:" command names. Those are not
  * really commands, but are used in security attacks in order to talk to
  * Redis instances via HTTP, with a technique called "cross protocol scripting"
@@ -1925,6 +2010,7 @@ void securityWarningCommand(client *c) {
     }
     freeClientAsync(c);
 }
+#endif
 
 /* Rewrite the command vector of the client. All the new objects ref count
  * is incremented. The old command vector is freed, and the old objects
@@ -2115,6 +2201,7 @@ void asyncCloseClientOnOutputBufferLimitReached(client *c) {
     }
 }
 
+#if __redis_unmodified_upstream // Disable the event engine and net API of Redis
 /* Helper function used by freeMemoryIfNeeded() in order to flush slaves
  * output buffers without returning control to the event loop.
  * This is also called by SHUTDOWN for a best-effort attempt to send
@@ -2178,7 +2265,6 @@ int clientsArePaused(void) {
         client *c;
 
         server.clients_paused = 0;
-
         /* Put all the clients in the unblocked clients queue in order to
          * force the re-processing of the input buffer if any. */
         listRewind(server.clients,&li);
@@ -2218,3 +2304,4 @@ int processEventsWhileBlocked(void) {
     }
     return count;
 }
+#endif

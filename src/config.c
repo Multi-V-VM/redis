@@ -143,16 +143,20 @@ int yesnotoi(char *s) {
 }
 
 void appendServerSaveParams(time_t seconds, int changes) {
+#if __redis_unmodified_upstream // Disable saveparams
     server.saveparams = zrealloc(server.saveparams,sizeof(struct saveparam)*(server.saveparamslen+1));
     server.saveparams[server.saveparamslen].seconds = seconds;
     server.saveparams[server.saveparamslen].changes = changes;
     server.saveparamslen++;
+#endif
 }
 
 void resetServerSaveParams(void) {
+#if __redis_unmodified_upstream // Disable saevparams
     zfree(server.saveparams);
     server.saveparams = NULL;
     server.saveparamslen = 0;
+#endif
 }
 
 void queueLoadModule(sds path, sds *argv, int argc) {
@@ -344,7 +348,9 @@ void loadServerConfigFromString(char *config) {
                 err = "lfu-decay-time must be 0 or greater";
                 goto loaderr;
             }
-        } else if ((!strcasecmp(argv[0],"slaveof") ||
+        }
+#if __redis_unmodified_upstream // Disable the cluster and replication API of Redis
+        else if ((!strcasecmp(argv[0],"slaveof") ||
                     !strcasecmp(argv[0],"replicaof")) && argc == 3) {
             slaveof_linenum = linenum;
             server.masterhost = sdsnew(argv[1]);
@@ -424,7 +430,9 @@ void loadServerConfigFromString(char *config) {
             if ((server.rdb_checksum = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
             }
-        } else if (!strcasecmp(argv[0],"activerehashing") && argc == 2) {
+        }
+#endif
+        else if (!strcasecmp(argv[0],"activerehashing") && argc == 2) {
             if ((server.activerehashing = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
             }
@@ -443,9 +451,11 @@ void loadServerConfigFromString(char *config) {
         } else if ((!strcasecmp(argv[0],"slave-lazy-flush") ||
                     !strcasecmp(argv[0],"replica-lazy-flush")) && argc == 2)
         {
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
             if ((server.repl_slave_lazy_flush = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
             }
+#endif
         } else if (!strcasecmp(argv[0],"activedefrag") && argc == 2) {
             if ((server.active_defrag_enabled = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
@@ -467,7 +477,9 @@ void loadServerConfigFromString(char *config) {
             server.config_hz = atoi(argv[1]);
             if (server.config_hz < CONFIG_MIN_HZ) server.config_hz = CONFIG_MIN_HZ;
             if (server.config_hz > CONFIG_MAX_HZ) server.config_hz = CONFIG_MAX_HZ;
-        } else if (!strcasecmp(argv[0],"appendonly") && argc == 2) {
+        }
+#if __redis_unmodified_upstream // Disable the replication API of Redis
+        else if (!strcasecmp(argv[0],"appendonly") && argc == 2) {
             int yes;
 
             if ((yes = yesnotoi(argv[1])) == -1) {
@@ -526,7 +538,9 @@ void loadServerConfigFromString(char *config) {
             if ((server.aof_use_rdb_preamble = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
             }
-        } else if (!strcasecmp(argv[0],"requirepass") && argc == 2) {
+        }
+#endif
+        else if (!strcasecmp(argv[0],"requirepass") && argc == 2) {
             if (strlen(argv[1]) > CONFIG_AUTHPASS_MAX_LEN) {
                 err = "Password is longer than CONFIG_AUTHPASS_MAX_LEN";
                 goto loaderr;
@@ -540,8 +554,10 @@ void loadServerConfigFromString(char *config) {
                 err = "dbfilename can't be a path, just a filename";
                 goto loaderr;
             }
+#if __redis_unmodified_upstream // Disable the replication API of Redis
             zfree(server.rdb_filename);
             server.rdb_filename = zstrdup(argv[1]);
+#endif
         } else if (!strcasecmp(argv[0],"active-defrag-threshold-lower") && argc == 2) {
             server.active_defrag_threshold_lower = atoi(argv[1]);
             if (server.active_defrag_threshold_lower < 0 ||
@@ -628,7 +644,10 @@ void loadServerConfigFromString(char *config) {
                     err = "Target command name already exists"; goto loaderr;
                 }
             }
-        } else if (!strcasecmp(argv[0],"cluster-enabled") && argc == 2) {
+        }
+
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
+        else if (!strcasecmp(argv[0],"cluster-enabled") && argc == 2) {
             if ((server.cluster_enabled = yesnotoi(argv[1])) == -1) {
                 err = "argument must be 'yes' or 'no'"; goto loaderr;
             }
@@ -696,7 +715,9 @@ void loadServerConfigFromString(char *config) {
             server.lua_time_limit = strtoll(argv[1],NULL,10);
         } else if (!strcasecmp(argv[0],"lua-replicate-commands") && argc == 2) {
             server.lua_always_replicate_commands = yesnotoi(argv[1]);
-        } else if (!strcasecmp(argv[0],"slowlog-log-slower-than") &&
+        }
+#endif
+        else if (!strcasecmp(argv[0],"slowlog-log-slower-than") &&
                    argc == 2)
         {
             server.slowlog_log_slower_than = strtoll(argv[1],NULL,10);
@@ -796,7 +817,9 @@ void loadServerConfigFromString(char *config) {
                     err = "sentinel directive while not in sentinel mode";
                     goto loaderr;
                 }
+#if __redis_unmodified_upstream // Disable sentinel mode
                 err = sentinelHandleConfiguration(argv+1,argc-1);
+#endif
                 if (err) goto loaderr;
             }
         } else {
@@ -805,6 +828,7 @@ void loadServerConfigFromString(char *config) {
         sdsfreesplitres(argv,argc);
     }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Sanity checks. */
     if (server.cluster_enabled && server.masterhost) {
         linenum = slaveof_linenum;
@@ -812,7 +836,7 @@ void loadServerConfigFromString(char *config) {
         err = "replicaof directive not allowed in cluster mode";
         goto loaderr;
     }
-
+#endif
     sdsfreesplitres(lines,totlines);
     return;
 
@@ -924,10 +948,14 @@ void configSetCommand(client *c) {
     } config_set_special_field("masterauth") {
         zfree(server.masterauth);
         server.masterauth = ((char*)o->ptr)[0] ? zstrdup(o->ptr) : NULL;
-    } config_set_special_field("cluster-announce-ip") {
+    }
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
+    config_set_special_field("cluster-announce-ip") {
         zfree(server.cluster_announce_ip);
         server.cluster_announce_ip = ((char*)o->ptr)[0] ? zstrdup(o->ptr) : NULL;
-    } config_set_special_field("maxclients") {
+    }
+#endif
+    config_set_special_field("maxclients") {
         int orig_value = server.maxclients;
 
         if (getLongLongFromObject(o,&ll) == C_ERR || ll < 1) goto badfmt;
@@ -1056,7 +1084,9 @@ void configSetCommand(client *c) {
 
         if (flags == -1) goto badfmt;
         server.notify_keyspace_events = flags;
-    } config_set_special_field_with_alias("slave-announce-ip",
+    }
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
+    config_set_special_field_with_alias("slave-announce-ip",
                                           "replica-announce-ip")
     {
         zfree(server.slave_announce_ip);
@@ -1070,13 +1100,15 @@ void configSetCommand(client *c) {
       "repl-disable-tcp-nodelay",server.repl_disable_tcp_nodelay) {
     } config_set_bool_field(
       "repl-diskless-sync",server.repl_diskless_sync) {
-    } config_set_bool_field(
+    }
+    config_set_bool_field(
       "cluster-require-full-coverage",server.cluster_require_full_coverage) {
     } config_set_bool_field(
       "cluster-slave-no-failover",server.cluster_slave_no_failover) {
     } config_set_bool_field(
       "cluster-replica-no-failover",server.cluster_slave_no_failover) {
-    } config_set_bool_field(
+    }
+    config_set_bool_field(
       "aof-rewrite-incremental-fsync",server.aof_rewrite_incremental_fsync) {
     } config_set_bool_field(
       "rdb-save-incremental-fsync",server.rdb_save_incremental_fsync) {
@@ -1096,7 +1128,9 @@ void configSetCommand(client *c) {
       "slave-ignore-maxmemory",server.repl_slave_ignore_maxmemory) {
     } config_set_bool_field(
       "replica-ignore-maxmemory",server.repl_slave_ignore_maxmemory) {
-    } config_set_bool_field(
+    }
+#endif
+    config_set_bool_field(
       "activerehashing",server.activerehashing) {
     } config_set_bool_field(
       "activedefrag",server.active_defrag_enabled) {
@@ -1176,9 +1210,11 @@ void configSetCommand(client *c) {
       "zset-max-ziplist-value",server.zset_max_ziplist_value,0,LONG_MAX) {
     } config_set_numerical_field(
       "hll-sparse-max-bytes",server.hll_sparse_max_bytes,0,LONG_MAX) {
-    } config_set_numerical_field(
+    }
+    config_set_numerical_field(
       "lua-time-limit",server.lua_time_limit,0,LONG_MAX) {
-    } config_set_numerical_field(
+    }
+    config_set_numerical_field(
       "slowlog-log-slower-than",server.slowlog_log_slower_than,-1,LLONG_MAX) {
     } config_set_numerical_field(
       "slowlog-max-len",ll,0,LONG_MAX) {
@@ -1216,7 +1252,9 @@ void configSetCommand(client *c) {
     } config_set_numerical_field(
       "min-replicas-max-lag",server.repl_min_slaves_max_lag,0,INT_MAX) {
         refreshGoodSlavesCount();
-    } config_set_numerical_field(
+    }
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
+    config_set_numerical_field(
       "cluster-node-timeout",server.cluster_node_timeout,0,LLONG_MAX) {
     } config_set_numerical_field(
       "cluster-announce-port",server.cluster_announce_port,0,65535) {
@@ -1228,7 +1266,9 @@ void configSetCommand(client *c) {
       "cluster-slave-validity-factor",server.cluster_slave_validity_factor,0,INT_MAX) {
     } config_set_numerical_field(
       "cluster-replica-validity-factor",server.cluster_slave_validity_factor,0,INT_MAX) {
-    } config_set_numerical_field(
+    }
+#endif
+    config_set_numerical_field(
       "hz",server.config_hz,0,INT_MAX) {
         /* Hz is more an hint from the user, so we accept values out of range
          * but cap them to reasonable values. */
@@ -1331,15 +1371,21 @@ void configGetCommand(client *c) {
     serverAssertWithInfo(c,o,sdsEncodedObject(o));
 
     /* String values */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_string_field("dbfilename",server.rdb_filename);
+#endif
     config_get_string_field("requirepass",server.requirepass);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     config_get_string_field("masterauth",server.masterauth);
     config_get_string_field("cluster-announce-ip",server.cluster_announce_ip);
+#endif
     config_get_string_field("unixsocket",server.unixsocket);
     config_get_string_field("logfile",server.logfile);
     config_get_string_field("pidfile",server.pidfile);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_string_field("slave-announce-ip",server.slave_announce_ip);
     config_get_string_field("replica-announce-ip",server.slave_announce_ip);
+#endif
 
     /* Numerical values */
     config_get_numerical_field("maxmemory",server.maxmemory);
@@ -1355,10 +1401,12 @@ void configGetCommand(client *c) {
     config_get_numerical_field("active-defrag-cycle-min",server.active_defrag_cycle_min);
     config_get_numerical_field("active-defrag-cycle-max",server.active_defrag_cycle_max);
     config_get_numerical_field("active-defrag-max-scan-fields",server.active_defrag_max_scan_fields);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_numerical_field("auto-aof-rewrite-percentage",
             server.aof_rewrite_perc);
     config_get_numerical_field("auto-aof-rewrite-min-size",
             server.aof_rewrite_min_size);
+#endif
     config_get_numerical_field("hash-max-ziplist-entries",
             server.hash_max_ziplist_entries);
     config_get_numerical_field("hash-max-ziplist-value",
@@ -1387,10 +1435,14 @@ void configGetCommand(client *c) {
     config_get_numerical_field("slowlog-max-len",
             server.slowlog_max_len);
     config_get_numerical_field("port",server.port);
+
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     config_get_numerical_field("cluster-announce-port",server.cluster_announce_port);
     config_get_numerical_field("cluster-announce-bus-port",server.cluster_announce_bus_port);
+#endif
     config_get_numerical_field("tcp-backlog",server.tcp_backlog);
     config_get_numerical_field("databases",server.dbnum);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_numerical_field("repl-ping-slave-period",server.repl_ping_slave_period);
     config_get_numerical_field("repl-ping-replica-period",server.repl_ping_slave_period);
     config_get_numerical_field("repl-timeout",server.repl_timeout);
@@ -1406,14 +1458,18 @@ void configGetCommand(client *c) {
     config_get_numerical_field("min-replicas-to-write",server.repl_min_slaves_to_write);
     config_get_numerical_field("min-slaves-max-lag",server.repl_min_slaves_max_lag);
     config_get_numerical_field("min-replicas-max-lag",server.repl_min_slaves_max_lag);
+#endif
     config_get_numerical_field("hz",server.config_hz);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     config_get_numerical_field("cluster-node-timeout",server.cluster_node_timeout);
     config_get_numerical_field("cluster-migration-barrier",server.cluster_migration_barrier);
     config_get_numerical_field("cluster-slave-validity-factor",server.cluster_slave_validity_factor);
     config_get_numerical_field("cluster-replica-validity-factor",server.cluster_slave_validity_factor);
     config_get_numerical_field("repl-diskless-sync-delay",server.repl_diskless_sync_delay);
+#endif
     config_get_numerical_field("tcp-keepalive",server.tcpkeepalive);
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Bool (yes/no) values */
     config_get_bool_field("cluster-require-full-coverage",
             server.cluster_require_full_coverage);
@@ -1437,12 +1493,16 @@ void configGetCommand(client *c) {
             server.repl_slave_ignore_maxmemory);
     config_get_bool_field("stop-writes-on-bgsave-error",
             server.stop_writes_on_bgsave_err);
+#endif
     config_get_bool_field("daemonize", server.daemonize);
+#if __redis_unmodified_upstream // DIsable the replication API of Redis
     config_get_bool_field("rdbcompression", server.rdb_compression);
     config_get_bool_field("rdbchecksum", server.rdb_checksum);
+#endif
     config_get_bool_field("activerehashing", server.activerehashing);
     config_get_bool_field("activedefrag", server.active_defrag_enabled);
     config_get_bool_field("protected-mode", server.protected_mode);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_bool_field("repl-disable-tcp-nodelay",
             server.repl_disable_tcp_nodelay);
     config_get_bool_field("repl-diskless-sync",
@@ -1455,16 +1515,19 @@ void configGetCommand(client *c) {
             server.aof_load_truncated);
     config_get_bool_field("aof-use-rdb-preamble",
             server.aof_use_rdb_preamble);
+#endif
     config_get_bool_field("lazyfree-lazy-eviction",
             server.lazyfree_lazy_eviction);
     config_get_bool_field("lazyfree-lazy-expire",
             server.lazyfree_lazy_expire);
     config_get_bool_field("lazyfree-lazy-server-del",
             server.lazyfree_lazy_server_del);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     config_get_bool_field("slave-lazy-flush",
             server.repl_slave_lazy_flush);
     config_get_bool_field("replica-lazy-flush",
             server.repl_slave_lazy_flush);
+#endif
     config_get_bool_field("dynamic-hz",
             server.dynamic_hz);
 
@@ -1475,8 +1538,10 @@ void configGetCommand(client *c) {
             server.verbosity,loglevel_enum);
     config_get_enum_field("supervised",
             server.supervised_mode,supervised_mode_enum);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     config_get_enum_field("appendfsync",
             server.aof_fsync,aof_fsync_enum);
+#endif
     config_get_enum_field("syslog-facility",
             server.syslog_facility,syslog_facility_enum);
 
@@ -1588,9 +1653,11 @@ int dictSdsKeyCaseCompare(void *privdata, const void *key1, const void *key2);
 void dictSdsDestructor(void *privdata, void *val);
 void dictListDestructor(void *privdata, void *val);
 
+#if __redis_unmodified_upstream // Disable the sentinel mode
 /* Sentinel config rewriting is implemented inside sentinel.c by
  * rewriteConfigSentinelOption(). */
 void rewriteConfigSentinelOption(struct rewriteConfigState *state);
+#endif
 
 dictType optionToLineDictType = {
     dictSdsCaseHash,            /* hash function */
@@ -1903,7 +1970,7 @@ void rewriteConfigDirOption(struct rewriteConfigState *state) {
 /* Rewrite the slaveof option. */
 void rewriteConfigSlaveofOption(struct rewriteConfigState *state, char *option) {
     sds line;
-
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* If this is a master, we want all the slaveof config options
      * in the file to be removed. Note that if this is a cluster instance
      * we don't want a slaveof directive inside redis.conf. */
@@ -1911,6 +1978,8 @@ void rewriteConfigSlaveofOption(struct rewriteConfigState *state, char *option) 
         rewriteConfigMarkAsProcessed(state,option);
         return;
     }
+#endif
+
     line = sdscatprintf(sdsempty(),"%s %s %d", option,
         server.masterhost, server.masterport);
     rewriteConfigRewriteLine(state,option,line,1);
@@ -2123,15 +2192,19 @@ int rewriteConfig(char *path) {
     rewriteConfigYesNoOption(state,"daemonize",server.daemonize,0);
     rewriteConfigStringOption(state,"pidfile",server.pidfile,CONFIG_DEFAULT_PID_FILE);
     rewriteConfigNumericalOption(state,"port",server.port,CONFIG_DEFAULT_SERVER_PORT);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     rewriteConfigNumericalOption(state,"cluster-announce-port",server.cluster_announce_port,CONFIG_DEFAULT_CLUSTER_ANNOUNCE_PORT);
     rewriteConfigNumericalOption(state,"cluster-announce-bus-port",server.cluster_announce_bus_port,CONFIG_DEFAULT_CLUSTER_ANNOUNCE_BUS_PORT);
+#endif
     rewriteConfigNumericalOption(state,"tcp-backlog",server.tcp_backlog,CONFIG_DEFAULT_TCP_BACKLOG);
     rewriteConfigBindOption(state);
     rewriteConfigStringOption(state,"unixsocket",server.unixsocket,NULL);
     rewriteConfigOctalOption(state,"unixsocketperm",server.unixsocketperm,CONFIG_DEFAULT_UNIX_SOCKET_PERM);
     rewriteConfigNumericalOption(state,"timeout",server.maxidletime,CONFIG_DEFAULT_CLIENT_TIMEOUT);
     rewriteConfigNumericalOption(state,"tcp-keepalive",server.tcpkeepalive,CONFIG_DEFAULT_TCP_KEEPALIVE);
+#if __redis_unmodified_upstream // Disable the replication APi of Redis
     rewriteConfigNumericalOption(state,"replica-announce-port",server.slave_announce_port,CONFIG_DEFAULT_SLAVE_ANNOUNCE_PORT);
+#endif
     rewriteConfigEnumOption(state,"loglevel",server.verbosity,loglevel_enum,CONFIG_DEFAULT_VERBOSITY);
     rewriteConfigStringOption(state,"logfile",server.logfile,CONFIG_DEFAULT_LOGFILE);
     rewriteConfigYesNoOption(state,"syslog-enabled",server.syslog_enabled,CONFIG_DEFAULT_SYSLOG_ENABLED);
@@ -2139,12 +2212,15 @@ int rewriteConfig(char *path) {
     rewriteConfigSyslogfacilityOption(state);
     rewriteConfigSaveOption(state);
     rewriteConfigNumericalOption(state,"databases",server.dbnum,CONFIG_DEFAULT_DBNUM);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     rewriteConfigYesNoOption(state,"stop-writes-on-bgsave-error",server.stop_writes_on_bgsave_err,CONFIG_DEFAULT_STOP_WRITES_ON_BGSAVE_ERROR);
     rewriteConfigYesNoOption(state,"rdbcompression",server.rdb_compression,CONFIG_DEFAULT_RDB_COMPRESSION);
     rewriteConfigYesNoOption(state,"rdbchecksum",server.rdb_checksum,CONFIG_DEFAULT_RDB_CHECKSUM);
     rewriteConfigStringOption(state,"dbfilename",server.rdb_filename,CONFIG_DEFAULT_RDB_FILENAME);
+#endif
     rewriteConfigDirOption(state);
     rewriteConfigSlaveofOption(state,"replicaof");
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     rewriteConfigStringOption(state,"replica-announce-ip",server.slave_announce_ip,CONFIG_DEFAULT_SLAVE_ANNOUNCE_IP);
     rewriteConfigStringOption(state,"masterauth",server.masterauth,NULL);
     rewriteConfigStringOption(state,"cluster-announce-ip",server.cluster_announce_ip,NULL);
@@ -2161,6 +2237,7 @@ int rewriteConfig(char *path) {
     rewriteConfigNumericalOption(state,"replica-priority",server.slave_priority,CONFIG_DEFAULT_SLAVE_PRIORITY);
     rewriteConfigNumericalOption(state,"min-replicas-to-write",server.repl_min_slaves_to_write,CONFIG_DEFAULT_MIN_SLAVES_TO_WRITE);
     rewriteConfigNumericalOption(state,"min-replicas-max-lag",server.repl_min_slaves_max_lag,CONFIG_DEFAULT_MIN_SLAVES_MAX_LAG);
+#endif
     rewriteConfigStringOption(state,"requirepass",server.requirepass,NULL);
     rewriteConfigNumericalOption(state,"maxclients",server.maxclients,CONFIG_DEFAULT_MAX_CLIENTS);
     rewriteConfigBytesOption(state,"maxmemory",server.maxmemory,CONFIG_DEFAULT_MAXMEMORY);
@@ -2176,6 +2253,7 @@ int rewriteConfig(char *path) {
     rewriteConfigNumericalOption(state,"active-defrag-cycle-min",server.active_defrag_cycle_min,CONFIG_DEFAULT_DEFRAG_CYCLE_MIN);
     rewriteConfigNumericalOption(state,"active-defrag-cycle-max",server.active_defrag_cycle_max,CONFIG_DEFAULT_DEFRAG_CYCLE_MAX);
     rewriteConfigNumericalOption(state,"active-defrag-max-scan-fields",server.active_defrag_max_scan_fields,CONFIG_DEFAULT_DEFRAG_MAX_SCAN_FIELDS);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     rewriteConfigYesNoOption(state,"appendonly",server.aof_state != AOF_OFF,0);
     rewriteConfigStringOption(state,"appendfilename",server.aof_filename,CONFIG_DEFAULT_AOF_FILENAME);
     rewriteConfigEnumOption(state,"appendfsync",server.aof_fsync,aof_fsync_enum,CONFIG_DEFAULT_AOF_FSYNC);
@@ -2190,6 +2268,7 @@ int rewriteConfig(char *path) {
     rewriteConfigNumericalOption(state,"cluster-node-timeout",server.cluster_node_timeout,CLUSTER_DEFAULT_NODE_TIMEOUT);
     rewriteConfigNumericalOption(state,"cluster-migration-barrier",server.cluster_migration_barrier,CLUSTER_DEFAULT_MIGRATION_BARRIER);
     rewriteConfigNumericalOption(state,"cluster-replica-validity-factor",server.cluster_slave_validity_factor,CLUSTER_DEFAULT_SLAVE_VALIDITY);
+#endif
     rewriteConfigNumericalOption(state,"slowlog-log-slower-than",server.slowlog_log_slower_than,CONFIG_DEFAULT_SLOWLOG_LOG_SLOWER_THAN);
     rewriteConfigNumericalOption(state,"latency-monitor-threshold",server.latency_monitor_threshold,CONFIG_DEFAULT_LATENCY_MONITOR_THRESHOLD);
     rewriteConfigNumericalOption(state,"slowlog-max-len",server.slowlog_max_len,CONFIG_DEFAULT_SLOWLOG_MAX_LEN);
@@ -2209,19 +2288,25 @@ int rewriteConfig(char *path) {
     rewriteConfigYesNoOption(state,"protected-mode",server.protected_mode,CONFIG_DEFAULT_PROTECTED_MODE);
     rewriteConfigClientoutputbufferlimitOption(state);
     rewriteConfigNumericalOption(state,"hz",server.config_hz,CONFIG_DEFAULT_HZ);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     rewriteConfigYesNoOption(state,"aof-rewrite-incremental-fsync",server.aof_rewrite_incremental_fsync,CONFIG_DEFAULT_AOF_REWRITE_INCREMENTAL_FSYNC);
     rewriteConfigYesNoOption(state,"rdb-save-incremental-fsync",server.rdb_save_incremental_fsync,CONFIG_DEFAULT_RDB_SAVE_INCREMENTAL_FSYNC);
     rewriteConfigYesNoOption(state,"aof-load-truncated",server.aof_load_truncated,CONFIG_DEFAULT_AOF_LOAD_TRUNCATED);
     rewriteConfigYesNoOption(state,"aof-use-rdb-preamble",server.aof_use_rdb_preamble,CONFIG_DEFAULT_AOF_USE_RDB_PREAMBLE);
+#endif
     rewriteConfigEnumOption(state,"supervised",server.supervised_mode,supervised_mode_enum,SUPERVISED_NONE);
     rewriteConfigYesNoOption(state,"lazyfree-lazy-eviction",server.lazyfree_lazy_eviction,CONFIG_DEFAULT_LAZYFREE_LAZY_EVICTION);
     rewriteConfigYesNoOption(state,"lazyfree-lazy-expire",server.lazyfree_lazy_expire,CONFIG_DEFAULT_LAZYFREE_LAZY_EXPIRE);
     rewriteConfigYesNoOption(state,"lazyfree-lazy-server-del",server.lazyfree_lazy_server_del,CONFIG_DEFAULT_LAZYFREE_LAZY_SERVER_DEL);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     rewriteConfigYesNoOption(state,"replica-lazy-flush",server.repl_slave_lazy_flush,CONFIG_DEFAULT_SLAVE_LAZY_FLUSH);
+#endif
     rewriteConfigYesNoOption(state,"dynamic-hz",server.dynamic_hz,CONFIG_DEFAULT_DYNAMIC_HZ);
 
+#if __redis_unmodified_upstream // Disable the sentinel mode of Redis
     /* Rewrite Sentinel config if in Sentinel mode. */
     if (server.sentinel_mode) rewriteConfigSentinelOption(state);
+#endif
 
     /* Step 3: remove all the orphaned lines in the old file, that is, lines
      * that were used by a config option and are no longer used, like in case

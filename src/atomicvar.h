@@ -57,11 +57,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if __redis_unmodified_upstream // Disable syscalls from pthread.h
 #include <pthread.h>
+#endif
 
 #ifndef __ATOMIC_VAR_H
 #define __ATOMIC_VAR_H
 
+#if __redis_unmodified_upstream // Make these macros independent on various flags
 /* To test Redis with Helgrind (a Valgrind tool) it is useful to define
  * the following macro, so that __sync macros are used: those can be detected
  * by Helgrind (even if they are less efficient) so that no false positive
@@ -130,4 +133,26 @@
 #define REDIS_ATOMIC_API "pthread-mutex"
 
 #endif
+
+#else
+
+#define atomicIncr(var,count) do { \
+    var += (count); \
+} while(0)
+#define atomicGetIncr(var,oldvalue_var,count) do { \
+    oldvalue_var = var; \
+    var += (count); \
+} while(0)
+#define atomicDecr(var,count) do { \
+    var -= (count); \
+} while(0)
+#define atomicGet(var,dstvar) do { \
+    dstvar = var; \
+} while(0)
+#define atomicSet(var,value) do { \
+    var = value; \
+} while(0)
+#define REDIS_ATOMIC_API "wasm-atomic-api"
+#endif
+
 #endif /* __ATOMIC_VAR_H */

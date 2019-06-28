@@ -1817,6 +1817,7 @@ uint64_t raxSize(rax *rax) {
     return rax->numele;
 }
 
+#if __redis_unmodified_upstream // Disable the radix tree debugging API of Redis
 /* ----------------------------- Introspection ------------------------------ */
 
 /* This function is mostly used for debugging and learning purposes.
@@ -1941,3 +1942,4 @@ unsigned long raxTouch(raxNode *n) {
     }
     return sum;
 }
+#endif

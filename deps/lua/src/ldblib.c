@@ -391,8 +391,10 @@ static const luaL_Reg dblib[] = {
 };
 
 
+#if __redis_unmodified_upstream // Disable lua debugging API of Redis
 LUALIB_API int luaopen_debug (lua_State *L) {
   luaL_register(L, LUA_DBLIBNAME, dblib);
   return 1;
 }
+#endif
 

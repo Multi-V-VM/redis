@@ -31,6 +31,12 @@
 #include "geo.h"
 #include "geohash_helper.h"
 #include "debugmacro.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#endif
 
 /* Things exported from t_zset.c only for geo.c, since it is the only other
  * part of Redis that requires close zset introspection. */

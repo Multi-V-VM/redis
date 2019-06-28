@@ -447,12 +447,16 @@ static int luaB_newproxy (lua_State *L) {
 static const luaL_Reg base_funcs[] = {
   {"assert", luaB_assert},
   {"collectgarbage", luaB_collectgarbage},
+#if __redis_unmodified_upstream // Disable working with files
   {"dofile", luaB_dofile},
+#endif
   {"error", luaB_error},
   {"gcinfo", luaB_gcinfo},
   {"getfenv", luaB_getfenv},
   {"getmetatable", luaB_getmetatable},
+#if __redis_unmodified_upstream // Disable working with files
   {"loadfile", luaB_loadfile},
+#endif
   {"load", luaB_load},
   {"loadstring", luaB_loadstring},
   {"next", luaB_next},

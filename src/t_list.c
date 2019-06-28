@@ -28,6 +28,10 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <strings.h>
+#endif
 
 /*-----------------------------------------------------------------------------
  * List API
@@ -596,12 +600,15 @@ void rpoplpushCommand(client *c) {
         signalModifiedKey(c->db,touchedkey);
         decrRefCount(touchedkey);
         server.dirty++;
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
         if (c->cmd->proc == brpoplpushCommand) {
             rewriteClientCommandVector(c,3,shared.rpoplpush,c->argv[1],c->argv[2]);
         }
+#endif
     }
 }
 
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
 /*-----------------------------------------------------------------------------
  * Blocking POP operations
  *----------------------------------------------------------------------------*/
@@ -775,3 +782,4 @@ void brpoplpushCommand(client *c) {
         }
     }
 }
+#endif

@@ -34,13 +34,16 @@
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
+#if __redis_unmodified_upstream // Disable syscalls from some included libs
 #include <unistd.h>
 #include <sys/time.h>
+#endif
 #include <float.h>
 #include <stdint.h>
 #include <errno.h>
+#if __redis_unmodified_upstream // Disable syscalls from some included libs
 #include <time.h>
-
+#endif
 #include "util.h"
 #include "sha1.h"
 
@@ -549,7 +552,7 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly) {
             if (*p == '.') l--;
         }
     } else {
-        l = snprintf(buf,len,"%.17Lg", value);
+        l = snprintf(buf,len,"%.17Lf", value);
         if (l+1 > len) return 0; /* No room. */
     }
     buf[l] = '\0';
@@ -567,6 +570,7 @@ void getRandomBytes(unsigned char *p, size_t len) {
     static unsigned char seed[20]; /* The SHA1 seed, from /dev/urandom. */
     static uint64_t counter = 0; /* The counter we hash with the seed. */
 
+#if __redis_unmodified_upstream // Disable random initialization
     if (!seed_initialized) {
         /* Initialize a seed and use SHA1 in counter mode, where we hash
          * the same seed with a progressive counter. For the goals of this
@@ -587,6 +591,13 @@ void getRandomBytes(unsigned char *p, size_t len) {
         }
         if (fp) fclose(fp);
     }
+#else
+    if (!seed_initialized) {
+        for(int i = 0; i < 20; ++i) {
+            seed[i] = rand() & 0xFF;
+        }
+    }
+#endif
 
     while(len) {
         unsigned char digest[20];
@@ -617,6 +628,7 @@ void getRandomHexChars(char *p, size_t len) {
     for (j = 0; j < len; j++) p[j] = charset[p[j] & 0x0F];
 }
 
+#if __redis_unmodified_upstream // Disable file API
 /* Given the filename, return the absolute path as an SDS string, or NULL
  * if it fails for some reason. Note that "filename" may be an absolute path
  * already, this will be detected and handled correctly.
@@ -668,12 +680,13 @@ sds getAbsolutePath(char *filename) {
     sdsfree(relpath);
     return abspath;
 }
+#endif
 
 /*
  * Gets the proper timezone in a more portable fashion
  * i.e timezone variables are linux specific.
  */
-
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
 unsigned long getTimeZone(void) {
 #ifdef __linux__
     return timezone;
@@ -686,6 +699,7 @@ unsigned long getTimeZone(void) {
     return tz.tz_minuteswest * 60UL;
 #endif
 }
+#endif
 
 /* Return true if the specified path is just a file basename without any
  * relative or absolute path. This function just checks that no / or \

@@ -35,19 +35,26 @@
 #include "solarisfixes.h"
 #include "rio.h"
 
+#if __redis_unmodified_upstream // Disable syscalls from some included libs
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <time.h>
+#endif
 #include <limits.h>
 #include <unistd.h>
 #include <errno.h>
+#if __redis_unmodified_upstream // Disable syscalls from some included libs
 #include <inttypes.h>
 #include <pthread.h>
 #include <syslog.h>
 #include <netinet/in.h>
+#endif
 #include <lua.h>
+#if __redis_unmodified_upstream // Disable syscalls from signal.h
 #include <signal.h>
+#endif
 
 typedef long long mstime_t; /* millisecond time type. */
 
@@ -452,9 +459,15 @@ typedef long long mstime_t; /* millisecond time type. */
 #define run_with_period(_ms_) if ((_ms_ <= 1000/server.hz) || !(server.cronloops%((_ms_)/(1000/server.hz))))
 
 /* We can print the stacktrace, so our assert is defined this way: */
+#if __redis_unmodified_upstream // Use the unreachable Wasm instruction instead of exit that can involve some syscalls
 #define serverAssertWithInfo(_c,_o,_e) ((_e)?(void)0 : (_serverAssertWithInfo(_c,_o,#_e,__FILE__,__LINE__),_exit(1)))
 #define serverAssert(_e) ((_e)?(void)0 : (_serverAssert(#_e,__FILE__,__LINE__),_exit(1)))
 #define serverPanic(...) _serverPanic(__FILE__,__LINE__,__VA_ARGS__),_exit(1)
+#else
+#define serverAssertWithInfo(_c,_o,_e) ((_e)?(void)0 : (_serverAssertWithInfo(_c,_o,#_e,__FILE__,__LINE__),__builtin_unreachable()))
+#define serverAssert(_e) ((_e)?(void)0 : (_serverAssert(#_e,__FILE__,__LINE__),__builtin_unreachable()))
+#define serverPanic(...) _serverPanic(__FILE__,__LINE__,__VA_ARGS__),__builtin_unreachable()
+#endif
 
 /*-----------------------------------------------------------------------------
  * Data types
@@ -540,6 +553,7 @@ typedef struct moduleValue {
     void *value;
 } moduleValue;
 
+#if __redis_unmodified_upstream // Disable the module API of Redis
 /* This is a wrapper for the 'rio' streams used inside rdb.c in Redis, so that
  * the user does not have to take the total count of the written bytes nor
  * to care about error conditions. */
@@ -552,6 +566,7 @@ typedef struct RedisModuleIO {
                          * 2 (current version with opcodes annotation). */
     struct RedisModuleCtx *ctx; /* Optional context, see RM_GetContextFromIO()*/
 } RedisModuleIO;
+#endif
 
 /* Macro to initialize an IO context. Note that the 'ver' field is populated
  * inside rdb.c according to the version of the value to load. */
@@ -736,6 +751,8 @@ typedef struct client {
     time_t obuf_soft_limit_reached_time;
     int flags;              /* Client flags: CLIENT_* macros. */
     int authenticated;      /* When requirepass is non-NULL. */
+
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     int replstate;          /* Replication state if this is a slave. */
     int repl_put_online_on_ack; /* Install slave write handler on ACK. */
     int repldbfd;           /* Replication DB file descriptor. */
@@ -753,10 +770,13 @@ typedef struct client {
     int slave_listening_port; /* As configured with: SLAVECONF listening-port */
     char slave_ip[NET_IP_STR_LEN]; /* Optionally given by REPLCONF ip-address */
     int slave_capa;         /* Slave capabilities: SLAVE_CAPA_* bitwise OR. */
+#endif
     multiState mstate;      /* MULTI/EXEC state */
     int btype;              /* Type of blocking op if CLIENT_BLOCKED. */
     blockingState bpop;     /* blocking state */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     long long woff;         /* Last write global replication offset. */
+#endif
     list *watched_keys;     /* Keys WATCHED for MULTI/EXEC CAS */
     dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
     list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */
@@ -913,8 +933,9 @@ struct malloc_stats {
 /*-----------------------------------------------------------------------------
  * Global server state
  *----------------------------------------------------------------------------*/
-
+#if __redis_unmodified_upstream // Disable cluster API of redis
 struct clusterState;
+#endif
 
 /* AIX defines hz to __hz, we don't use this define and in order to allow
  * Redis build on AIX we need to undef it. */
@@ -928,7 +949,9 @@ struct clusterState;
 
 struct redisServer {
     /* General */
+#if __redis_unmodified_upstream // Disable pid file of Redis
     pid_t pid;                  /* Main process pid. */
+#endif
     char *configfile;           /* Absolute config file path, or NULL */
     char *executable;           /* Absolute executable file path. */
     char **exec_argv;           /* Executable argv vector (copy). */
@@ -940,13 +963,17 @@ struct redisServer {
     redisDb *db;
     dict *commands;             /* Command table */
     dict *orig_commands;        /* Command table before command renaming. */
+#if __redis_unmodified_upstream // Disable the event engine API of Redis
     aeEventLoop *el;
+#endif
     unsigned int lruclock;      /* Clock for LRU eviction */
     int shutdown_asap;          /* SHUTDOWN needed ASAP */
     int activerehashing;        /* Incremental rehash in serverCron() */
     int active_defrag_running;  /* Active defragmentation running (holds current scan aggressiveness) */
     char *requirepass;          /* Pass for AUTH command, or NULL */
+#if __redis_unmodified_upstream // Disable the pid file
     char *pidfile;              /* PID file path */
+#endif
     int arch_bits;              /* 32 or 64 depending on sizeof(long) */
     int cronloops;              /* Number of times the cron function run */
     char runid[CONFIG_RUN_ID_SIZE+1];  /* ID always different at every exec. */
@@ -961,6 +988,7 @@ struct redisServer {
     int module_blocked_pipe[2]; /* Pipe used to awake the event loop if a
                                    client blocked on a module command needs
                                    to be processed. */
+#if __redis_unmodified_upstream // Disable the net API of Redis
     /* Networking */
     int port;                   /* TCP listening port */
     int tcp_backlog;            /* TCP listen() backlog */
@@ -991,6 +1019,13 @@ struct redisServer {
     off_t loading_loaded_bytes;
     time_t loading_start_time;
     off_t loading_process_events_interval_bytes;
+#else
+    list *clients;              /* List of active clients */
+    list *monitors;    /* List of slaves and MONITORs */
+    client *current_client; /* Current client, only used on crash report */
+    rax *clients_index;         /* Active clients dictionary by client ID. */
+    uint64_t next_client_id;    /* Next client unique ID. Incremental. */
+#endif
     /* Fast pointers to often looked up command */
     struct redisCommand *delCommand, *multiCommand, *lpushCommand,
                         *lpopCommand, *rpopCommand, *zpopminCommand,
@@ -1054,6 +1089,8 @@ struct redisServer {
     int supervised_mode;            /* See SUPERVISED_* */
     int daemonize;                  /* True if running as a daemon */
     clientBufferLimitsConfig client_obuf_limits[CLIENT_TYPE_OBUF_COUNT];
+
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* AOF persistence */
     int aof_state;                  /* AOF_(ON|OFF|WAIT_REWRITE) */
     int aof_fsync;                  /* Kind of fsync() policy */
@@ -1119,11 +1156,16 @@ struct redisServer {
     } child_info_data;
     /* Propagation of commands in AOF / replication */
     redisOpArray also_propagate;    /* Additional command to propagate. */
+#else
+    time_t lastsave;                /* Unix time of last successful save */
+    long long dirty;                /* Changes to DB from the last save */
+#endif
     /* Logging */
     char *logfile;                  /* Path of log file */
     int syslog_enabled;             /* Is syslog enabled? */
     char *syslog_ident;             /* Syslog ident */
     int syslog_facility;            /* Syslog facility */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* Replication (master) */
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
@@ -1184,6 +1226,9 @@ struct redisServer {
     /* Synchronous replication. */
     list *clients_waiting_acks;         /* Clients waiting in WAIT command. */
     int get_ack_from_slaves;            /* If true we send REPLCONF GETACK. */
+#else
+    char *masterhost;               /* Hostname of master */
+#endif
     /* Limits */
     unsigned int maxclients;            /* Max number of simultaneous clients */
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
@@ -1225,6 +1270,7 @@ struct redisServer {
     list *pubsub_patterns;  /* A list of pubsub_patterns */
     int notify_keyspace_events; /* Events to propagate via Pub/Sub. This is an
                                    xor of NOTIFY_... flags. */
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Cluster */
     int cluster_enabled;      /* Is cluster enabled? */
     mstime_t cluster_node_timeout; /* Cluster node timeout. */
@@ -1243,6 +1289,8 @@ struct redisServer {
                                       to set in order to suppress certain
                                       native Redis Cluster features. Check the
                                       REDISMODULE_CLUSTER_FLAG_*. */
+#endif
+
     /* Scripting */
     lua_State *lua; /* The Lua interpreter. We use just one for all clients */
     client *lua_client;   /* The "fake client" to query Redis from Lua */
@@ -1262,6 +1310,7 @@ struct redisServer {
                              execution. */
     int lua_kill;         /* Kill the script if true. */
     int lua_always_replicate_commands; /* Default replication type. */
+
     /* Lazy free */
     int lazyfree_lazy_eviction;
     int lazyfree_lazy_expire;
@@ -1278,11 +1327,13 @@ struct redisServer {
     /* System hardware info */
     size_t system_memory_size;  /* Total memory in system as reported by OS */
 
+#if __redis_unmodified_upstream // Disable mutexes usage
     /* Mutexes used to protect atomic variables when atomic builtins are
      * not available. */
     pthread_mutex_t lruclock_mutex;
     pthread_mutex_t next_client_id_mutex;
     pthread_mutex_t unixtime_mutex;
+#endif
 };
 
 typedef struct pubsubPattern {
@@ -1402,7 +1453,9 @@ void moduleFreeContext(struct RedisModuleCtx *ctx);
 void unblockClientFromModule(client *c);
 void moduleHandleBlockedClients(void);
 void moduleBlockedClientTimedOut(client *c);
+#if __redis_unmodified_upstream // Disable the event engine API of Redis
 void moduleBlockedClientPipeReadable(aeEventLoop *el, int fd, void *privdata, int mask);
+#endif
 size_t moduleCount(void);
 void moduleAcquireGIL(void);
 void moduleReleaseGIL(void);
@@ -1425,15 +1478,21 @@ void closeTimedoutClients(void);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
+#if __redis_unmodified_upstream // Disable the event engine API of Redis
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
+#endif
 void *addDeferredMultiBulkLength(client *c);
 void setDeferredMultiBulkLength(client *c, void *node, long length);
 void processInputBuffer(client *c);
 void processInputBufferAndReplicate(client *c);
+#if __redis_unmodified_upstream // Disable the event engine API of Redis
 void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
+#else
+void readQueryFromClient(client *c, int mask, const char *request, int req_length);
+#endif
 void addReplyString(client *c, const char *s, size_t len);
 void addReplyBulk(client *c, robj *obj);
 void addReplyBulkCString(client *c, const char *s);
@@ -1569,6 +1628,7 @@ unsigned long long estimateObjectIdleTime(robj *o);
 void trimStringObjectIfNeeded(robj *o);
 #define sdsEncodedObject(objptr) (objptr->encoding == OBJ_ENCODING_RAW || objptr->encoding == OBJ_ENCODING_EMBSTR)
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* Synchronous I/O with timeout */
 ssize_t syncWrite(int fd, char *ptr, ssize_t size, long long timeout);
 ssize_t syncRead(int fd, char *ptr, ssize_t size, long long timeout);
@@ -1608,16 +1668,20 @@ void feedReplicationBacklog(void *ptr, size_t len);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
 void stopLoading(void);
+#endif
 
 #define DISK_ERROR_TYPE_AOF 1       /* Don't accept writes: AOF errors. */
 #define DISK_ERROR_TYPE_RDB 2       /* Don't accept writes: RDB errors. */
 #define DISK_ERROR_TYPE_NONE 0      /* No problems, we can accept writes. */
 int writeCommandsDeniedByDiskError(void);
 
+#if __redis_unmodified_upstream // Disable the persistence API of Redis
 /* RDB persistence */
 #include "rdb.h"
 int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi);
+#endif
 
+#if __redis_unmodified_upstream // Disable the persistence API of Redis
 /* AOF persistence */
 void flushAppendOnlyFile(int force);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int argc);
@@ -1636,6 +1700,7 @@ void openChildInfoPipe(void);
 void closeChildInfoPipe(void);
 void sendChildInfo(int process_type);
 void receiveChildInfo(void);
+#endif
 
 /* Sorted sets data type */
 
@@ -1883,16 +1948,20 @@ void sentinelTimer(void);
 char *sentinelHandleConfiguration(char **argv, int argc);
 void sentinelIsRunning(void);
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* redis-check-rdb & aof */
 int redis_check_rdb(char *rdbfilename, FILE *fp);
 int redis_check_rdb_main(int argc, char **argv, FILE *fp);
 int redis_check_aof_main(int argc, char **argv);
+#endif
 
 /* Scripting */
 void scriptingInit(int setup);
+#if __redis_unmodified_upstream // Disable the lua debugger
 int ldbRemoveChild(pid_t pid);
 void ldbKillForkedSessions(void);
 int ldbPendingChildren(void);
+#endif
 sds luaCreateFunction(client *c, lua_State *lua, robj *body);
 
 /* Blocked clients */
@@ -1960,7 +2029,9 @@ void randomkeyCommand(client *c);
 void keysCommand(client *c);
 void scanCommand(client *c);
 void dbsizeCommand(client *c);
+#if __redis_unmodified_upstream // Disable replication API of Redis
 void lastsaveCommand(client *c);
+#endif
 void saveCommand(client *c);
 void bgsaveCommand(client *c);
 void bgrewriteaofCommand(client *c);
@@ -2003,7 +2074,9 @@ void lremCommand(client *c);
 void rpoplpushCommand(client *c);
 void infoCommand(client *c);
 void mgetCommand(client *c);
+#if __redis_unmodified_upstream // Disable the monitor command
 void monitorCommand(client *c);
+#endif
 void expireCommand(client *c);
 void expireatCommand(client *c);
 void pexpireCommand(client *c);
@@ -2084,7 +2157,9 @@ void readwriteCommand(client *c);
 void dumpCommand(client *c);
 void objectCommand(client *c);
 void memoryCommand(client *c);
+#if __redis_unmodified_upstream // Disable client command
 void clientCommand(client *c);
+#endif
 void evalCommand(client *c);
 void evalShaCommand(client *c);
 void scriptCommand(client *c);
@@ -2140,7 +2215,9 @@ void _serverAssert(const char *estr, const char *file, int line);
 void _serverPanic(const char *file, int line, const char *msg, ...);
 void bugReportStart(void);
 void serverLogObjectDebugInfo(const robj *o);
+#if __redis_unmodified_upstream // Disable sigsegv handler
 void sigsegvHandler(int sig, siginfo_t *info, void *secret);
+#endif
 sds genRedisInfoString(char *section);
 void enableWatchdog(int period);
 void disableWatchdog(void);
@@ -2150,9 +2227,20 @@ int memtest_preserving_test(unsigned long *m, size_t bytes, int passes);
 void mixDigest(unsigned char *digest, void *ptr, size_t len);
 void xorDigest(unsigned char *digest, void *ptr, size_t len);
 
+#if __redis_unmodified_upstream // Disable redis debug macros
 #define redisDebug(fmt, ...) \
     printf("DEBUG %s:%d > " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
 #define redisDebugMark() \
     printf("-- MARK %s:%d --\n", __FILE__, __LINE__)
+#endif
+
+#if __redis_unmodified_upstream // Export some functions to use it our wrapper
+#else
+int serverCron();
+void afterSleep();
+void beforeSleep();
+int initRedis(int argc, char **argv);
+void freeClientArgv(client *c);
+#endif
 
 #endif

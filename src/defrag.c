@@ -35,7 +35,9 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // Disable imports from time.h
 #include <time.h>
+#endif
 #include <assert.h>
 #include <stddef.h>
 

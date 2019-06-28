@@ -34,6 +34,12 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdio.h>
+#include <string.h>
+#include <strings.h>
+#endif
 
 /* Dictionary type for latency events. */
 int dictStringKeyCompare(void *privdata, const void *key1, const void *key2) {
@@ -58,6 +64,7 @@ dictType latencyTimeSeriesDictType = {
 
 /* ------------------------- Utility functions ------------------------------ */
 
+#if __redis_unmodified_upstream // Disable writing to file
 #ifdef __linux__
 /* Returns 1 if Transparent Huge Pages support is enabled in the kernel.
  * Otherwise (or if we are unable to check) 0 is returned. */
@@ -73,6 +80,7 @@ int THPIsEnabled(void) {
     fclose(fp);
     return (strstr(buf,"[never]") == NULL) ? 1 : 0;
 }
+#endif
 #endif
 
 /* Report the amount of AnonHugePages in smap, in bytes. If the return
@@ -97,7 +105,11 @@ void latencyMonitorInit(void) {
  * server.latency_monitor_threshold. */
 void latencyAddSample(char *event, mstime_t latency) {
     struct latencyTimeSeries *ts = dictFetchValue(server.latency_events,event);
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
     time_t now = time(NULL);
+#else
+    time_t now = ustime();
+#endif
     int prev;
 
     /* Create the time series if it does not exist. */
@@ -120,7 +132,11 @@ void latencyAddSample(char *event, mstime_t latency) {
         return;
     }
 
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
     ts->samples[ts->idx].time = time(NULL);
+#else
+    ts->samples[ts->idx].time = ustime();
+#endif
     ts->samples[ts->idx].latency = latency;
 
     ts->idx++;
@@ -196,7 +212,11 @@ void analyzeLatencyForEvent(char *event, struct latencyStats *ls) {
      * the second a range of seconds. */
     if (ls->samples) {
         ls->avg = sum / ls->samples;
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
         ls->period = time(NULL) - ls->period;
+#else
+        ls->period = ustime() - ls->period;
+#endif
         if (ls->period == 0) ls->period = 1;
     }
 
@@ -442,11 +462,11 @@ sds createLatencyReport(void) {
         if (advise_no_appendfsync) {
             report = sdscat(report,"- Assuming from the point of view of data safety this is viable in your environment, you could try to enable the 'no-appendfsync-on-rewrite' option, so that fsync will not be performed while there is a child rewriting the AOF file or producing an RDB file (the moment where there is high disk contention).\n");
         }
-
+#if __redis_unmodified_upstream // Disable the replication API of Redis
         if (advise_relax_fsync_policy && server.aof_fsync == AOF_FSYNC_ALWAYS) {
             report = sdscat(report,"- Your fsync policy is set to 'always'. It is very hard to get good performances with such a setup, if possible try to relax the fsync policy to 'onesec'.\n");
         }
-
+#endif
         if (advise_write_load_info) {
             report = sdscat(report,"- Latency during the AOF atomic rename operation or when the final difference is flushed to the AOF file at the end of the rewrite, sometimes is caused by very high write load, causing the AOF buffer to get very large. If possible try to send less commands to accomplish the same work, or use Lua scripts to group multiple operations into a single EVALSHA call.\n");
         }
@@ -535,7 +555,11 @@ sds latencyCommandGenSparkeline(char *event, struct latencyTimeSeries *ts) {
         }
         /* Use as label the number of seconds / minutes / hours / days
          * ago the event happened. */
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
         elapsed = time(NULL) - ts->samples[i].time;
+#else
+        elapsed = ustime() - ts->samples[i].time;
+#endif
         if (elapsed < 60)
             snprintf(buf,sizeof(buf),"%ds",elapsed);
         else if (elapsed < 3600)

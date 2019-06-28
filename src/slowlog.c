@@ -41,6 +41,10 @@
 
 #include "server.h"
 #include "slowlog.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <strings.h>
+#endif
 
 /* Create a new slowlog entry.
  * Incrementing the ref count of all the objects retained is up to
@@ -85,7 +89,11 @@ slowlogEntry *slowlogCreateEntry(client *c, robj **argv, int argc, long long dur
             }
         }
     }
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
     se->time = time(NULL);
+#else
+    se->time = ustime();
+#endif
     se->duration = duration;
     se->id = server.slowlog_entry_id++;
     se->peerid = sdsnew(getClientPeerId(c));

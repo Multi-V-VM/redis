@@ -31,8 +31,14 @@
 #include "cluster.h"
 #include "atomicvar.h"
 
+#if __redis_unmodified_upstream // Disable possible syscalls from signal.h and some libs explicitly
 #include <signal.h>
+#else
 #include <ctype.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <strings.h>
+#endif
 
 /*-----------------------------------------------------------------------------
  * C-level DB API
@@ -57,6 +63,7 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
     if (de) {
         robj *val = dictGetVal(de);
 
+#if __redis_unmodified_upstream // Disable replication API of Redis
         /* Update the access time for the ageing algorithm.
          * Don't do it if we have a saving child, as this will trigger
          * a copy on write madness. */
@@ -70,6 +77,19 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
                 val->lru = LRU_CLOCK();
             }
         }
+#else
+        /* Update the access time for the ageing algorithm.
+         * Don't do it if we have a saving child, as this will trigger
+         * a copy on write madness. */
+        if (!(flags & LOOKUP_NOTOUCH))
+        {
+            if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+                updateLFU(val);
+            } else {
+                val->lru = LRU_CLOCK();
+            }
+        }
+#endif
         return val;
     } else {
         return NULL;
@@ -109,6 +129,7 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
             return NULL;
         }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         /* However if we are in the context of a slave, expireIfNeeded() will
          * not really try to expire the key, it only returns information
          * about the "logical" status of the key: key expiring is up to the
@@ -129,6 +150,7 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
             server.stat_keyspace_misses++;
             return NULL;
         }
+#endif
     }
     val = lookupKey(db,key,flags);
     if (val == NULL)
@@ -175,10 +197,12 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
     int retval = dictAdd(db->dict, copy, val);
 
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
+#if __redis_unmodified_upstream // Disable the blocked API of Redis
     if (val->type == OBJ_LIST ||
         val->type == OBJ_ZSET)
         signalKeyAsReady(db, key);
     if (server.cluster_enabled) slotToKeyAdd(key);
+#endif
 }
 
 /* Overwrite an existing key with a new value. Incrementing the reference
@@ -197,10 +221,12 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
     }
     dictSetVal(db->dict, de, val);
 
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
     if (server.lazyfree_lazy_server_del) {
         freeObjAsync(old);
         dictSetVal(db->dict, &auxentry, NULL);
     }
+#endif
 
     dictFreeVal(db->dict, &auxentry);
 }
@@ -273,7 +299,9 @@ int dbSyncDelete(redisDb *db, robj *key) {
      * the key, because it is shared with the main dictionary. */
     if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
     if (dictDelete(db->dict,key->ptr) == DICT_OK) {
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         if (server.cluster_enabled) slotToKeyDel(key);
+#endif
         return 1;
     } else {
         return 0;
@@ -283,8 +311,12 @@ int dbSyncDelete(redisDb *db, robj *key) {
 /* This is a wrapper whose behavior depends on the Redis lazy free
  * configuration. Deletes the key synchronously or asynchronously. */
 int dbDelete(redisDb *db, robj *key) {
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
     return server.lazyfree_lazy_server_del ? dbAsyncDelete(db,key) :
                                              dbSyncDelete(db,key);
+#else
+    return dbSyncDelete(db,key);
+#endif
 }
 
 /* Prepare the string object stored at 'key' to be modified destructively
@@ -340,7 +372,9 @@ robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o) {
  * database(s). Otherwise -1 is returned in the specific case the
  * DB number is out of range, and errno is set to EINVAL. */
 long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
     int async = (flags & EMPTYDB_ASYNC);
+#endif
     long long removed = 0;
 
     if (dbnum < -1 || dbnum >= server.dbnum) {
@@ -358,13 +392,19 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
 
     for (int j = startdb; j <= enddb; j++) {
         removed += dictSize(server.db[j].dict);
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
         if (async) {
             emptyDbAsync(&server.db[j]);
         } else {
             dictEmpty(server.db[j].dict,callback);
             dictEmpty(server.db[j].expires,callback);
         }
+#else
+        dictEmpty(server.db[j].dict,callback);
+        dictEmpty(server.db[j].expires,callback);
+#endif
     }
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (server.cluster_enabled) {
         if (async) {
             slotToKeyFlushAsync();
@@ -372,6 +412,7 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
             slotToKeyFlush();
         }
     }
+#endif
     if (dbnum == -1) flushSlaveKeysWithExpireList();
     return removed;
 }
@@ -448,6 +489,7 @@ void flushallCommand(client *c) {
     signalFlushedDb(-1);
     server.dirty += emptyDb(-1,flags,NULL);
     addReply(c,shared.ok);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.rdb_child_pid != -1) {
         kill(server.rdb_child_pid,SIGUSR1);
         rdbRemoveTempFile(server.rdb_child_pid);
@@ -461,6 +503,7 @@ void flushallCommand(client *c) {
         rdbSave(server.rdb_filename,rsiptr);
         server.dirty = saved_dirty;
     }
+#endif
     server.dirty++;
 }
 
@@ -470,8 +513,12 @@ void delGenericCommand(client *c, int lazy) {
 
     for (j = 1; j < c->argc; j++) {
         expireIfNeeded(c->db,c->argv[j]);
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
         int deleted  = lazy ? dbAsyncDelete(c->db,c->argv[j]) :
                               dbSyncDelete(c->db,c->argv[j]);
+#else
+        int deleted = dbSyncDelete(c->db,c->argv[j]);
+#endif
         if (deleted) {
             signalModifiedKey(c->db,c->argv[j]);
             notifyKeyspaceEvent(NOTIFY_GENERIC,
@@ -509,11 +556,12 @@ void selectCommand(client *c) {
     if (getLongFromObjectOrReply(c, c->argv[1], &id,
         "invalid DB index") != C_OK)
         return;
-
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (server.cluster_enabled && id != 0) {
         addReplyError(c,"SELECT is not allowed in cluster mode");
         return;
     }
+#endif
     if (selectDb(c,id) == C_ERR) {
         addReplyError(c,"DB index is out of range");
     } else {
@@ -809,9 +857,11 @@ void dbsizeCommand(client *c) {
     addReplyLongLong(c,dictSize(c->db->dict));
 }
 
+#if __redis_unmodified_upstream // Disable replication API of Redis
 void lastsaveCommand(client *c) {
     addReplyLongLong(c,server.lastsave);
 }
+#endif
 
 void typeCommand(client *c) {
     robj *o;
@@ -839,6 +889,7 @@ void typeCommand(client *c) {
 }
 
 void shutdownCommand(client *c) {
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     int flags = 0;
 
     if (c->argc > 2) {
@@ -860,10 +911,15 @@ void shutdownCommand(client *c) {
      * with half-read data).
      *
      * Also when in Sentinel mode clear the SAVE flag and force NOSAVE. */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.loading || server.sentinel_mode)
         flags = (flags & ~SHUTDOWN_SAVE) | SHUTDOWN_NOSAVE;
     if (prepareForShutdown(flags) == C_OK) exit(0);
+#endif
     addReplyError(c,"Errors trying to SHUTDOWN. Check logs.");
+#else
+    addReplyError(c,"Currently SHUTDOWN command isn't supported.");
+#endif
 }
 
 void renameGenericCommand(client *c, int nx) {
@@ -922,10 +978,12 @@ void moveCommand(client *c) {
     int srcid;
     long long dbid, expire;
 
+#if __redis_unmodified_upstream // Disable cluster API of Redis
     if (server.cluster_enabled) {
         addReplyError(c,"MOVE is not allowed in cluster mode");
         return;
     }
+#endif
 
     /* Obtain source and target DB pointers */
     src = c->db;
@@ -971,6 +1029,7 @@ void moveCommand(client *c) {
     addReply(c,shared.cone);
 }
 
+#if __redis_unmodified_upstream // Disable the blocked API of Redis
 /* Helper function for dbSwapDatabases(): scans the list of keys that have
  * one or more blocked clients for B[LR]POP or other blocking commands
  * and signal the keys as ready if they are of the right type. See the comment
@@ -988,6 +1047,7 @@ void scanDatabaseForReadyLists(redisDb *db) {
     }
     dictReleaseIterator(di);
 }
+#endif
 
 /* Swap two databases at runtime so that all clients will magically see
  * the new database even if already connected. Note that the client
@@ -1015,6 +1075,7 @@ int dbSwapDatabases(int id1, int id2) {
     db2->expires = aux.expires;
     db2->avg_ttl = aux.avg_ttl;
 
+#if __redis_unmodified_upstream // Disable the blocked API of Redis
     /* Now we need to handle clients blocked on lists: as an effect
      * of swapping the two DBs, a client that was waiting for list
      * X in a given DB, may now actually be unblocked if X happens
@@ -1026,6 +1087,7 @@ int dbSwapDatabases(int id1, int id2) {
      * if needed. */
     scanDatabaseForReadyLists(db1);
     scanDatabaseForReadyLists(db2);
+#endif
     return C_OK;
 }
 
@@ -1033,11 +1095,13 @@ int dbSwapDatabases(int id1, int id2) {
 void swapdbCommand(client *c) {
     long id1, id2;
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Not allowed in cluster mode: we have just DB 0 there. */
     if (server.cluster_enabled) {
         addReplyError(c,"SWAPDB is not allowed in cluster mode");
         return;
     }
+#endif
 
     /* Get the two DBs indexes. */
     if (getLongFromObjectOrReply(c, c->argv[1], &id1,
@@ -1082,9 +1146,11 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     de = dictAddOrFind(db->expires,dictGetKey(kde));
     dictSetSignedIntegerVal(de,when);
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
     if (c && writable_slave && !(c->flags & CLIENT_MASTER))
         rememberSlaveKeyWithExpire(db,key);
+#endif
 }
 
 /* Return the expire time of the specified key, or -1 if no expire
@@ -1118,9 +1184,11 @@ void propagateExpire(redisDb *db, robj *key, int lazy) {
     incrRefCount(argv[0]);
     incrRefCount(argv[1]);
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.aof_state != AOF_OFF)
         feedAppendOnlyFile(server.delCommand,db->id,argv,2);
     replicationFeedSlaves(server.slaves,db->id,argv,2);
+#endif
 
     decrRefCount(argv[0]);
     decrRefCount(argv[1]);
@@ -1132,8 +1200,10 @@ int keyIsExpired(redisDb *db, robj *key) {
 
     if (when < 0) return 0; /* No expire for this key */
 
+#if __redis_unmodified_upstream // Disable the expire API of Redis
     /* Don't expire anything while loading. It will be done later. */
     if (server.loading) return 0;
+#endif
 
     /* If we are in the context of a Lua script, we pretend that time is
      * blocked to when the Lua script started. This way a key can expire
@@ -1141,7 +1211,6 @@ int keyIsExpired(redisDb *db, robj *key) {
      * script execution, making propagation to slaves / AOF consistent.
      * See issue #1525 on Github for more information. */
     mstime_t now = server.lua_caller ? server.lua_time_start : mstime();
-
     return now > when;
 }
 
@@ -1182,8 +1251,12 @@ int expireIfNeeded(redisDb *db, robj *key) {
     propagateExpire(db,key,server.lazyfree_lazy_expire);
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
         "expired",key,db->id);
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
     return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
                                          dbSyncDelete(db,key);
+#else
+    return dbSyncDelete(db,key);
+#endif
 }
 
 /* -----------------------------------------------------------------------------
@@ -1238,6 +1311,7 @@ int *getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, in
  * This function uses the command table if a command-specific helper function
  * is not required, otherwise it calls the command-specific function. */
 int *getKeysFromCommand(struct redisCommand *cmd, robj **argv, int argc, int *numkeys) {
+#if __redis_unmodified_upstream // Disable the module API of Redis
     if (cmd->flags & CMD_MODULE_GETKEYS) {
         return moduleGetCommandKeysViaAPI(cmd,argv,argc,numkeys);
     } else if (!(cmd->flags & CMD_MODULE) && cmd->getkeys_proc) {
@@ -1245,6 +1319,9 @@ int *getKeysFromCommand(struct redisCommand *cmd, robj **argv, int argc, int *nu
     } else {
         return getKeysUsingCommandTable(cmd,argv,argc,numkeys);
     }
+#else
+    return getKeysUsingCommandTable(cmd,argv,argc,numkeys);
+#endif
 }
 
 /* Free the result of getKeysFromCommand. */
@@ -1463,6 +1540,7 @@ int *xreadGetKeys(struct redisCommand *cmd, robj **argv, int argc, int *numkeys)
     return keys;
 }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
 /* Slot to Key API. This is used by Redis Cluster in order to obtain in
  * a fast way a key that belongs to a specified hash slot. This is useful
  * while rehashing the cluster and in other conditions when we need to
@@ -1547,3 +1625,4 @@ unsigned int delKeysInSlot(unsigned int hashslot) {
 unsigned int countKeysInSlot(unsigned int hashslot) {
     return server.cluster->slots_keys_count[hashslot];
 }
+#endif

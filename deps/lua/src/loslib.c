@@ -235,9 +235,10 @@ static const luaL_Reg syslib[] = {
 /* }====================================================== */
 
 
-
+#if __redis_unmodified_upstream // Disable lua os module
 LUALIB_API int luaopen_os (lua_State *L) {
   luaL_register(L, LUA_OSLIBNAME, syslib);
   return 1;
 }
+#endif
 

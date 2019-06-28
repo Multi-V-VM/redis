@@ -5,7 +5,9 @@
 */
 
 
+#if __redis_unmodified_upstream // Currently setjmp/longjump cannot be translated to Wasm
 #include <setjmp.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -103,7 +105,11 @@ void luaD_throw (lua_State *L, int errcode) {
       lua_unlock(L);
       G(L)->panic(L);
     }
+#if __redis_unmodified_upstream // Disable a call to exit from libc
     exit(EXIT_FAILURE);
+#else
+    __builtin_unreachable();
+#endif
   }
 }
 

@@ -29,6 +29,10 @@
 
 #include "server.h"
 #include <math.h> /* isnan(), isinf() */
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <string.h>
+#endif
 
 /*-----------------------------------------------------------------------------
  * String Commands
@@ -83,6 +87,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         addReply(c, abort_reply ? abort_reply : shared.nullbulk);
         return;
     }
+
     setKey(c->db,key,val);
     server.dirty++;
     if (expire) setExpire(c,c->db,key,mstime()+milliseconds);

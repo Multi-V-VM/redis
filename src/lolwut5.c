@@ -36,6 +36,12 @@
 #include "server.h"
 #include <math.h>
 
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#endif
+
 /* This structure represents our canvas. Drawing functions will take a pointer
  * to a canvas to write to it. Later the canvas can be rendered to a string
  * suitable to be printed on the screen, using unicode Braille characters. */

@@ -1,0 +1,23 @@
+TARGET = redis
+CC = /opt/wasi-sdk/bin/clang
+SYSROOT = /opt/wasi-sdk/share/sysroot
+TARGET_TRIPLE = wasm32-unknown-wasi
+CFLAGS = -nostartfiles -fvisibility=hidden
+LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
+EXPORT_FUNCS = --export=allocate,--export=deallocate,--export=invoke
+SDK = sdk/allocator.cpp sdk/logger.cpp
+LUA =/code/deps/lua/src
+REDIS_SERVER = adlist.c quicklist.c dict.c server.c sds.c zmalloc.c lzf_c.c lzf_d.c pqsort.c zipmap.c sha1.c ziplist.c release.c networking.c util.c object.c db.c t_string.c t_list.c t_set.c t_zset.c t_hash.c multi.c sort.c intset.c crc16.c endianconv.c slowlog.c scripting.c rand.c crc64.c bitops.c notify.c hyperloglog.c latency.c sparkline.c geo.c evict.c expire.c geohash.c geohash_helper.c defrag.c siphash.c rax.c t_stream.c listpack.c lolwut.c lolwut5.c wrapper.c
+
+.PHONY: default all clean
+
+default: $(TARGET)
+all: default
+
+$(TARGET): $(REDIS_SERVER)
+	$(CC) --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) -I$(LUA) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -c
+
+.PRECIOUS: $(TARGET)
+
+clean:
+	-rm -f $(TARGET).wasm

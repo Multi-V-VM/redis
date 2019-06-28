@@ -95,6 +95,7 @@ sds keyspaceEventsFlagsToString(int flags) {
  * 'key' is a Redis object representing the key name.
  * 'dbid' is the database ID where the key lives.  */
 void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
+#if __redis_unmodified_upstream // Disable the event engine of Redis
     sds chan;
     robj *chanobj, *eventobj;
     int len = -1;
@@ -135,4 +136,5 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
         decrRefCount(chanobj);
     }
     decrRefCount(eventobj);
+#endif
 }

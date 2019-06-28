@@ -58,6 +58,11 @@
 
 #include "server.h"
 #include <math.h>
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <string.h>
+#include <stdlib.h>
+#endif
 
 /*-----------------------------------------------------------------------------
  * Skiplist implementation of the low level API
@@ -3256,6 +3261,7 @@ void zpopmaxCommand(client *c) {
         c->argc == 3 ? c->argv[2] : NULL);
 }
 
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
 /* BZPOPMIN / BZPOPMAX actual implementation. */
 void blockingGenericZpopCommand(client *c, int where) {
     robj *o;
@@ -3305,3 +3311,4 @@ void bzpopminCommand(client *c) {
 void bzpopmaxCommand(client *c) {
     blockingGenericZpopCommand(c,ZSET_MAX);
 }
+#endif

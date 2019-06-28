@@ -41,7 +41,11 @@
 #include <string.h>
 #include <stdarg.h>
 #include <limits.h>
+#if __redis_unmodified_upstream // Disable imports from time.h
 #include <sys/time.h>
+#else
+#include "server.h"
+#endif
 
 #include "dict.h"
 #include "zmalloc.h"
@@ -230,21 +234,27 @@ int dictRehash(dict *d, int n) {
     return 1;
 }
 
+#if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
 long long timeInMilliseconds(void) {
     struct timeval tv;
 
     gettimeofday(&tv,NULL);
     return (((long long)tv.tv_sec)*1000)+(tv.tv_usec/1000);
 }
+#endif
 
 /* Rehash for an amount of time between ms milliseconds and ms+1 milliseconds */
 int dictRehashMilliseconds(dict *d, int ms) {
+#if __redis_unmodified_upstream // Disable the lazy, time-oriented rehashing
     long long start = timeInMilliseconds();
+#endif
     int rehashes = 0;
 
     while(dictRehash(d,100)) {
         rehashes += 100;
+#if __redis_unmodified_upstream // Disable the lazy, time-oriented rehashing
         if (timeInMilliseconds()-start > ms) break;
+#endif
     }
     return rehashes;
 }
@@ -489,7 +499,9 @@ dictEntry *dictFind(dict *d, const void *key)
                 return he;
             he = he->next;
         }
-        if (!dictIsRehashing(d)) return NULL;
+        if (!dictIsRehashing(d)) {
+            return NULL;
+        }
     }
     return NULL;
 }

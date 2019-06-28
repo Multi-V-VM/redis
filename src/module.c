@@ -676,8 +676,10 @@ int commandFlagsFromString(char *s) {
 int RM_CreateCommand(RedisModuleCtx *ctx, const char *name, RedisModuleCmdFunc cmdfunc, const char *strflags, int firstkey, int lastkey, int keystep) {
     int flags = strflags ? commandFlagsFromString((char*)strflags) : 0;
     if (flags == -1) return REDISMODULE_ERR;
+#if __redis_unmodified_upstream // Disable the module API of Redis
     if ((flags & CMD_MODULE_NO_CLUSTER) && server.cluster_enabled)
         return REDISMODULE_ERR;
+#endif
 
     struct redisCommand *rediscmd;
     RedisModuleCommandProxy *cp;
@@ -1428,8 +1430,10 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
          flags |= REDISMODULE_CTX_FLAGS_REPLICATED;
     }
 
+#if __redis_unmodified_upstream // Disable the cluser API of Redis
     if (server.cluster_enabled)
         flags |= REDISMODULE_CTX_FLAGS_CLUSTER;
+#endif
 
     /* Maxmemory and eviction policy */
     if (server.maxmemory > 0) {
@@ -1439,6 +1443,7 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
             flags |= REDISMODULE_CTX_FLAGS_EVICT;
     }
 
+#if __redis_unmodified_upstream // Disable the replication and cluster API of Redis
     /* Persistence flags */
     if (server.aof_state != AOF_OFF)
         flags |= REDISMODULE_CTX_FLAGS_AOF;
@@ -1453,6 +1458,7 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
         if (server.repl_slave_ro)
             flags |= REDISMODULE_CTX_FLAGS_READONLY;
     }
+#endif
 
     /* OOM flag. */
     float level;
@@ -2752,6 +2758,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
         goto cleanup;
     }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* If this is a Redis Cluster node, we need to make sure the module is not
      * trying to access non-local keys, with the exception of commands
      * received from our master. */
@@ -2766,6 +2773,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
             goto cleanup;
         }
     }
+#endif
 
     /* If we are using single commands replication, we need to wrap what
      * we propagate into a MULTI/EXEC block, so that it will be atomic like
@@ -3087,6 +3095,7 @@ void *RM_ModuleTypeGetValue(RedisModuleKey *key) {
     return mv->value;
 }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* --------------------------------------------------------------------------
  * RDB loading and saving functions
  * -------------------------------------------------------------------------- */
@@ -3306,6 +3315,7 @@ loaderr:
     moduleRDBLoadError(io);
     return 0; /* Never reached. */
 }
+#endif
 
 /* --------------------------------------------------------------------------
  * Key digest API (DEBUG DIGEST interface for modules types)
@@ -3367,6 +3377,7 @@ void RM_DigestEndSequence(RedisModuleDigest *md) {
     memset(md->o,0,sizeof(md->o));
 }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
 /* --------------------------------------------------------------------------
  * AOF API for modules data types
  * -------------------------------------------------------------------------- */
@@ -3421,6 +3432,7 @@ void RM_EmitAOF(RedisModuleIO *io, const char *cmdname, const char *fmt, ...) {
     zfree(argv);
     return;
 }
+#endif
 
 /* --------------------------------------------------------------------------
  * IO context handling
@@ -3499,6 +3511,7 @@ void RM_LogIOError(RedisModuleIO *io, const char *levelstr, const char *fmt, ...
     va_end(ap);
 }
 
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
 /* --------------------------------------------------------------------------
  * Blocking clients from modules
  * -------------------------------------------------------------------------- */
@@ -3793,6 +3806,7 @@ RedisModuleBlockedClient *RM_GetBlockedClientHandle(RedisModuleCtx *ctx) {
 int RM_BlockedClientDisconnected(RedisModuleCtx *ctx) {
     return (ctx->flags & REDISMODULE_CTX_BLOCKED_DISCONNECTED) != 0;
 }
+#endif
 
 /* --------------------------------------------------------------------------
  * Thread Safe Contexts
@@ -3977,6 +3991,7 @@ void moduleUnsubscribeNotifications(RedisModule *module) {
     }
 }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
 /* --------------------------------------------------------------------------
  * Modules Cluster API
  * -------------------------------------------------------------------------- */
@@ -4229,6 +4244,7 @@ void RM_SetClusterFlags(RedisModuleCtx *ctx, uint64_t flags) {
     if (flags & REDISMODULE_CLUSTER_FLAG_NO_REDIRECTION)
         server.cluster_module_flags |= CLUSTER_MODULE_FLAG_NO_REDIRECTION;
 }
+#endif
 
 /* --------------------------------------------------------------------------
  * Modules Timers API
@@ -5136,6 +5152,7 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(ModuleTypeSetValue);
     REGISTER_API(ModuleTypeGetType);
     REGISTER_API(ModuleTypeGetValue);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     REGISTER_API(SaveUnsigned);
     REGISTER_API(LoadUnsigned);
     REGISTER_API(SaveSigned);
@@ -5149,18 +5166,21 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(SaveFloat);
     REGISTER_API(LoadFloat);
     REGISTER_API(EmitAOF);
+#endif
     REGISTER_API(Log);
     REGISTER_API(LogIOError);
     REGISTER_API(StringAppendBuffer);
     REGISTER_API(RetainString);
     REGISTER_API(StringCompare);
     REGISTER_API(GetContextFromIO);
+#if __redis_unmodified_upstream // Disable the blocking API of Redis
     REGISTER_API(BlockClient);
     REGISTER_API(UnblockClient);
     REGISTER_API(IsBlockedReplyRequest);
     REGISTER_API(IsBlockedTimeoutRequest);
     REGISTER_API(GetBlockedClientPrivateData);
     REGISTER_API(AbortBlock);
+#endif
     REGISTER_API(Milliseconds);
     REGISTER_API(GetThreadSafeContext);
     REGISTER_API(FreeThreadSafeContext);
@@ -5170,22 +5190,28 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(DigestAddLongLong);
     REGISTER_API(DigestEndSequence);
     REGISTER_API(SubscribeToKeyspaceEvents);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     REGISTER_API(RegisterClusterMessageReceiver);
     REGISTER_API(SendClusterMessage);
     REGISTER_API(GetClusterNodeInfo);
     REGISTER_API(GetClusterNodesList);
     REGISTER_API(FreeClusterNodesList);
+#endif
     REGISTER_API(CreateTimer);
     REGISTER_API(StopTimer);
     REGISTER_API(GetTimerInfo);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     REGISTER_API(GetMyClusterID);
     REGISTER_API(GetClusterSize);
+#endif
     REGISTER_API(GetRandomBytes);
     REGISTER_API(GetRandomHexChars);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     REGISTER_API(BlockedClientDisconnected);
     REGISTER_API(SetDisconnectCallback);
     REGISTER_API(GetBlockedClientHandle);
     REGISTER_API(SetClusterFlags);
+#endif
     REGISTER_API(CreateDict);
     REGISTER_API(FreeDict);
     REGISTER_API(DictSize);

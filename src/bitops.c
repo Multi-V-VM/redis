@@ -29,6 +29,11 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // To make all implicit functions prototypes explicit
+#else
+#include <stdio.h>
+#include <string.h>
+#endif
 
 /* -----------------------------------------------------------------------------
  * Helpers and low level bit functions.

@@ -33,6 +33,10 @@
 #include "server.h"
 
 #include <math.h>
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <string.h>
+#endif
 
 /* This is the charset used to display the graphs, but multiple rows are used
  * to increase the resolution. */

@@ -58,10 +58,14 @@ int activeExpireCycleTryExpire(redisDb *db, dictEntry *de, long long now) {
         robj *keyobj = createStringObject(key,sdslen(key));
 
         propagateExpire(db,keyobj,server.lazyfree_lazy_expire);
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
         if (server.lazyfree_lazy_expire)
             dbAsyncDelete(db,keyobj);
         else
             dbSyncDelete(db,keyobj);
+#else
+        dbSyncDelete(db,keyobj);
+#endif
         notifyKeyspaceEvent(NOTIFY_EXPIRED,
             "expired",keyobj,db->id);
         decrRefCount(keyobj);
@@ -105,10 +109,12 @@ void activeExpireCycle(int type) {
     int dbs_per_call = CRON_DBS_PER_CALL;
     long long start = ustime(), timelimit, elapsed;
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* When clients are paused the dataset should be static not just from the
      * POV of clients not being able to write, but also from the POV of
      * expires and evictions of keys not being performed. */
     if (clientsArePaused()) return;
+#endif
 
     if (type == ACTIVE_EXPIRE_CYCLE_FAST) {
         /* Don't start a fast cycle if the previous cycle did not exit
@@ -424,11 +430,19 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
      *
      * Instead we take the other branch of the IF statement setting an expire
      * (possibly in the past) and wait for an explicit DEL from the master. */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (when <= mstime() && !server.loading && !server.masterhost) {
+#else
+    if (when <= mstime() && !server.masterhost) {
+#endif
         robj *aux;
 
+#if __redis_unmodified_upstream // Disable the lazy free API of Redis
         int deleted = server.lazyfree_lazy_expire ? dbAsyncDelete(c->db,key) :
                                                     dbSyncDelete(c->db,key);
+#else
+        int deleted = dbSyncDelete(c->db,key);
+#endif
         serverAssertWithInfo(c,key,deleted);
         server.dirty++;
 

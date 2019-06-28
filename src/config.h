@@ -116,6 +116,7 @@
 #define rdb_fsync_range(fd,off,size) fsync(fd)
 #endif
 
+#if __redis_unmodified_upstream // Disable setprotitle
 /* Check if we can use setproctitle().
  * BSD systems have support for it, we provide an implementation for
  * Linux and osx. */
@@ -128,6 +129,7 @@
 #define INIT_SETPROCTITLE_REPLACEMENT
 void spt_init(int argc, char *argv[]);
 void setproctitle(const char *fmt, ...);
+#endif
 #endif
 
 /* Byte ordering detection */

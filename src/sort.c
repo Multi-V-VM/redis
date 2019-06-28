@@ -32,6 +32,12 @@
 #include "server.h"
 #include "pqsort.h" /* Partial qsort for SORT+LIMIT */
 #include <math.h> /* isnan() */
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <string.h>
+#include <strings.h>
+#include <stdlib.h>
+#endif
 
 zskiplistNode* zslGetElementByRank(zskiplist *zsl, unsigned long rank);
 
@@ -253,19 +259,23 @@ void sortCommand(client *c) {
             } else {
                 /* If BY is specified with a real patter, we can't accept
                  * it in cluster mode. */
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
                 if (server.cluster_enabled) {
                     addReplyError(c,"BY option of SORT denied in Cluster mode.");
                     syntax_error++;
                     break;
                 }
+#endif
             }
             j++;
         } else if (!strcasecmp(c->argv[j]->ptr,"get") && leftargs >= 1) {
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
             if (server.cluster_enabled) {
                 addReplyError(c,"GET option of SORT denied in Cluster mode.");
                 syntax_error++;
                 break;
             }
+#endif
             listAddNodeTail(operations,createSortOperation(
                 SORT_OP_GET,c->argv[j+1]));
             getop++;

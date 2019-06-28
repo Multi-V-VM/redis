@@ -5,7 +5,9 @@
 */
 
 
+#if __redis_unmodified_upstream // Disable syscalls from some libs
 #include <signal.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,8 +35,10 @@ static void lstop (lua_State *L, lua_Debug *ar) {
 
 
 static void laction (int i) {
+#if __redis_unmodified_upstream // Disable signal handler
   signal(i, SIG_DFL); /* if another SIGINT happens before lstop,
                               terminate process (default action) */
+#endif
   lua_sethook(globalL, lstop, LUA_MASKCALL | LUA_MASKRET | LUA_MASKCOUNT, 1);
 }
 
@@ -98,9 +102,13 @@ static int docall (lua_State *L, int narg, int clear) {
   int base = lua_gettop(L) - narg;  /* function index */
   lua_pushcfunction(L, traceback);  /* push traceback function */
   lua_insert(L, base);  /* put it under chunk and args */
+#if __redis_unmodified_upstream // Disable signal handlers
   signal(SIGINT, laction);
+#endif
   status = lua_pcall(L, narg, (clear ? 0 : LUA_MULTRET), base);
+#if __redis_unmodified_upstream // Disable signal handlers
   signal(SIGINT, SIG_DFL);
+#endif
   lua_remove(L, base);  /* remove traceback function */
   /* force a complete garbage collection in case of errors */
   if (status != 0) lua_gc(L, LUA_GCCOLLECT, 0);

@@ -28,6 +28,10 @@
  */
 
 #include "server.h"
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#endif
 
 /*-----------------------------------------------------------------------------
  * Set Commands

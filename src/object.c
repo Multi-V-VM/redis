@@ -30,6 +30,13 @@
 
 #include "server.h"
 #include <math.h>
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#endif
 #include <ctype.h>
 
 #ifdef __CYGWIN__
@@ -652,6 +659,7 @@ int getLongDoubleFromObject(robj *o, long double *target) {
         if (sdsEncodedObject(o)) {
             errno = 0;
             value = strtold(o->ptr, &eptr);
+
             if (sdslen(o->ptr) == 0 ||
                 isspace(((const char*)o->ptr)[0]) ||
                 (size_t)(eptr-(char*)o->ptr) != sdslen(o->ptr) ||
@@ -978,12 +986,15 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
     mem_total += server.initial_memory_usage;
 
     mem = 0;
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.repl_backlog)
         mem += zmalloc_size(server.repl_backlog);
+#endif
     mh->repl_backlog = mem;
     mem_total += mem;
 
     mem = 0;
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (listLength(server.slaves)) {
         listIter li;
         listNode *ln;
@@ -996,6 +1007,7 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
             mem += sizeof(client);
         }
     }
+#endif
     mh->clients_slaves = mem;
     mem_total+=mem;
 
@@ -1018,22 +1030,26 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
     mem_total+=mem;
 
     mem = 0;
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     if (server.aof_state != AOF_OFF) {
         mem += sdsalloc(server.aof_buf);
         mem += aofRewriteBufferSize();
     }
     mh->aof_buffer = mem;
     mem_total+=mem;
+#endif
 
     mem = server.lua_scripts_mem;
     mem += dictSize(server.lua_scripts) * sizeof(dictEntry) +
         dictSlots(server.lua_scripts) * sizeof(dictEntry*);
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     mem += dictSize(server.repl_scriptcache_dict) * sizeof(dictEntry) +
         dictSlots(server.repl_scriptcache_dict) * sizeof(dictEntry*);
     if (listLength(server.repl_scriptcache_fifo) > 0) {
         mem += listLength(server.repl_scriptcache_fifo) * (sizeof(listNode) + 
             sdsZmallocSize(listNodeValue(listFirst(server.repl_scriptcache_fifo))));
     }
+#endif
     mh->lua_caches = mem;
     mem_total+=mem;
 
@@ -1132,9 +1148,15 @@ sds getMemoryDoctorReport(void) {
             num_reports++;
         }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
         /* Clients using more than 200k each average? */
         long numslaves = listLength(server.slaves);
         long numclients = listLength(server.clients)-numslaves;
+#else
+        /* Clients using more than 200k each average? */
+        long numslaves = 0;
+        long numclients = listLength(server.clients)-numslaves;
+#endif
         if (mh->clients_normal / numclients > (1024*200)) {
             big_client_buf = 1;
             num_reports++;

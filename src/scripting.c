@@ -38,6 +38,12 @@
 #include <ctype.h>
 #include <math.h>
 
+#if __redis_unmodified_upstream // Include some libs explicitly
+#else
+#include <stdlib.h>
+#include <string.h>
+#endif
+
 char *redisProtocolToLuaType_Int(lua_State *lua, char *reply);
 char *redisProtocolToLuaType_Bulk(lua_State *lua, char *reply);
 char *redisProtocolToLuaType_Status(lua_State *lua, char *reply);
@@ -45,6 +51,7 @@ char *redisProtocolToLuaType_Error(lua_State *lua, char *reply);
 char *redisProtocolToLuaType_MultiBulk(lua_State *lua, char *reply);
 int redis_math_random (lua_State *L);
 int redis_math_randomseed (lua_State *L);
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
 void ldbInit(void);
 void ldbDisable(client *c);
 void ldbEnable(client *c);
@@ -75,6 +82,7 @@ struct ldbState {
     size_t maxlen;  /* Max var dump / reply length. */
     int maxlen_hint_sent; /* Did we already hint about "set maxlen"? */
 } ldb;
+#endif
 
 /* ---------------------------------------------------------------------------
  * Utility functions.
@@ -208,11 +216,13 @@ char *redisProtocolToLuaType_MultiBulk(lua_State *lua, char *reply) {
 void luaPushError(lua_State *lua, char *error) {
     lua_Debug dbg;
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     /* If debugging is active and in step mode, log errors resulting from
      * Redis commands. */
     if (ldb.active && ldb.step) {
         ldbLog(sdscatprintf(sdsempty(),"<error> %s",error));
     }
+#endif
 
     lua_newtable(lua);
     lua_pushstring(lua,"err");
@@ -443,6 +453,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     c->argv = argv;
     c->argc = argc;
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     /* Log the command if debugging is active. */
     if (ldb.active && ldb.step) {
         sds cmdlog = sdsnew("<redis>");
@@ -458,6 +469,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         }
         ldbLog(cmdlog);
     }
+#endif
 
     /* Command lookup */
     cmd = lookupCommand(argv[0]->ptr);
@@ -479,6 +491,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         goto cleanup;
     }
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* Write commands are forbidden against read-only slaves, or if a
      * command marked as non-deterministic was already called in the context
      * of this script. */
@@ -488,7 +501,8 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
             luaPushError(lua,
                 "Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands replication mode.");
             goto cleanup;
-        } else if (server.masterhost && server.repl_slave_ro &&
+        }
+        else if (server.masterhost && server.repl_slave_ro &&
                    !server.loading &&
                    !(server.lua_caller->flags & CLIENT_MASTER))
         {
@@ -507,13 +521,16 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
             goto cleanup;
         }
     }
+#endif
 
     /* If we reached the memory limit configured via maxmemory, commands that
      * could enlarge the memory usage are not allowed, but only if this is the
      * first write in the context of this script, otherwise we can't stop
      * in the middle. */
     if (server.maxmemory &&             /* Maxmemory is actually enabled. */
+#if __redis_unmodified_upstream // Disable the replication API of Redis
         !server.loading &&              /* Don't care about mem if loading. */
+#endif
         !server.masterhost &&           /* Slave must execute the script. */
         server.lua_write_dirty == 0 &&  /* Script had no side effects so far. */
         (cmd->flags & CMD_DENYOOM))
@@ -527,6 +544,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     if (cmd->flags & CMD_RANDOM) server.lua_random_dirty = 1;
     if (cmd->flags & CMD_WRITE) server.lua_write_dirty = 1;
 
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     /* If this is a Redis Cluster node, we need to make sure Lua is not
      * trying to access non-local keys, with the exception of commands
      * received from our master or when loading the AOF back in memory. */
@@ -545,6 +563,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
             goto cleanup;
         }
     }
+#endif
 
     /* If we are using single commands replication, we need to wrap what
      * we propagate into a MULTI/EXEC block, so that it will be atomic like
@@ -593,9 +612,11 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     if (raise_error && reply[0] != '-') raise_error = 0;
     redisProtocolToLuaType(lua,reply);
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     /* If the debugger is active, log the reply from Redis. */
     if (ldb.active && ldb.step)
         ldbLogRedisReply(reply);
+#endif
 
     /* Sort the output array if needed, assuming it is a non-null multi bulk
      * reply as expected. */
@@ -727,6 +748,7 @@ int luaRedisReplicateCommandsCommand(lua_State *lua) {
     return 1;
 }
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
 /* redis.breakpoint()
  *
  * Allows to stop execution during a debuggign session from within
@@ -783,6 +805,7 @@ int luaRedisSetReplCommand(lua_State *lua) {
     server.lua_repl = flags;
     return 0;
 }
+#endif
 
 /* redis.log() */
 int luaLogCommand(lua_State *lua) {
@@ -840,7 +863,9 @@ void luaLoadLibraries(lua_State *lua) {
     luaLoadLib(lua, LUA_TABLIBNAME, luaopen_table);
     luaLoadLib(lua, LUA_STRLIBNAME, luaopen_string);
     luaLoadLib(lua, LUA_MATHLIBNAME, luaopen_math);
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     luaLoadLib(lua, LUA_DBLIBNAME, luaopen_debug);
+#endif
     luaLoadLib(lua, "cjson", luaopen_cjson);
     luaLoadLib(lua, "struct", luaopen_struct);
     luaLoadLib(lua, "cmsgpack", luaopen_cmsgpack);
@@ -855,10 +880,12 @@ void luaLoadLibraries(lua_State *lua) {
 /* Remove a functions that we don't want to expose to the Redis scripting
  * environment. */
 void luaRemoveUnsupportedFunctions(lua_State *lua) {
+#if __redis_unmodified_upstream // We use patched version of lua where these function has been already disabled
     lua_pushnil(lua);
     lua_setglobal(lua,"loadfile");
     lua_pushnil(lua);
     lua_setglobal(lua,"dofile");
+#endif
 }
 
 /* This function installs metamethods in the global table _G that prevent
@@ -917,7 +944,9 @@ void scriptingInit(int setup) {
         server.lua_client = NULL;
         server.lua_caller = NULL;
         server.lua_timedout = 0;
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
         ldbInit();
+#endif
     }
 
     luaLoadLibraries(lua);
@@ -972,6 +1001,7 @@ void scriptingInit(int setup) {
     lua_pushstring(lua, "error_reply");
     lua_pushcfunction(lua, luaRedisErrorReplyCommand);
     lua_settable(lua, -3);
+
     lua_pushstring(lua, "status_reply");
     lua_pushcfunction(lua, luaRedisStatusReplyCommand);
     lua_settable(lua, -3);
@@ -981,10 +1011,12 @@ void scriptingInit(int setup) {
     lua_pushcfunction(lua, luaRedisReplicateCommandsCommand);
     lua_settable(lua, -3);
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* redis.set_repl and associated flags. */
     lua_pushstring(lua,"set_repl");
     lua_pushcfunction(lua,luaRedisSetReplCommand);
     lua_settable(lua,-3);
+#endif
 
     lua_pushstring(lua,"REPL_NONE");
     lua_pushnumber(lua,PROPAGATE_NONE);
@@ -1006,6 +1038,7 @@ void scriptingInit(int setup) {
     lua_pushnumber(lua,PROPAGATE_AOF|PROPAGATE_REPL);
     lua_settable(lua,-3);
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     /* redis.breakpoint */
     lua_pushstring(lua,"breakpoint");
     lua_pushcfunction(lua,luaRedisBreakpointCommand);
@@ -1015,6 +1048,7 @@ void scriptingInit(int setup) {
     lua_pushstring(lua,"debug");
     lua_pushcfunction(lua,luaRedisDebugCommand);
     lua_settable(lua,-3);
+#endif
 
     /* Finally set the table as 'redis' global var. */
     lua_setglobal(lua,"redis");
@@ -1074,10 +1108,12 @@ void scriptingInit(int setup) {
         server.lua_client->flags |= CLIENT_LUA;
     }
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     /* Lua beginners often don't use "local", this is likely to introduce
      * subtle bugs in their code. To prevent problems we protect accesses
      * to global variables. */
     scriptingEnableGlobalsProtection(lua);
+#endif
 
     server.lua = lua;
 }
@@ -1314,6 +1350,7 @@ void evalGenericCommand(client *c, int evalsha) {
 
     /* Try to lookup the Lua function */
     lua_getglobal(lua, funcname);
+
     if (lua_isnil(lua,-1)) {
         lua_pop(lua,1); /* remove the nil from the stack */
         /* Function not defined... let's define it if we have the
@@ -1353,6 +1390,7 @@ void evalGenericCommand(client *c, int evalsha) {
     server.lua_caller = c;
     server.lua_time_start = mstime();
     server.lua_kill = 0;
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     if (server.lua_time_limit > 0 && ldb.active == 0) {
         lua_sethook(lua,luaMaskCountHook,LUA_MASKCOUNT,100000);
         delhook = 1;
@@ -1360,12 +1398,14 @@ void evalGenericCommand(client *c, int evalsha) {
         lua_sethook(server.lua,luaLdbLineHook,LUA_MASKLINE|LUA_MASKCOUNT,100000);
         delhook = 1;
     }
+#endif
 
     /* At this point whether this script was never seen before or if it was
      * already defined, we can call it. We have zero arguments and expect
      * a single return value. */
     err = lua_pcall(lua,0,1,-2);
 
+#if __redis_unmodified_upstream // Disable the lua debugger and cluster API of Redis
     /* Perform some cleanup that we need to do both on error and success. */
     if (delhook) lua_sethook(lua,NULL,0,0); /* Disable hook */
     if (server.lua_timedout) {
@@ -1376,6 +1416,7 @@ void evalGenericCommand(client *c, int evalsha) {
         if (server.masterhost && server.master)
             queueClientForReprocessing(server.master);
     }
+#endif
     server.lua_caller = NULL;
 
     /* Call the Lua garbage collector from time to time to avoid a
@@ -1406,6 +1447,7 @@ void evalGenericCommand(client *c, int evalsha) {
         lua_pop(lua,1); /* Remove the error handler. */
     }
 
+#if __redis_unmodified_upstream // Disable the replication API of Redis
     /* If we are using single commands replication, emit EXEC if there
      * was at least a write. */
     if (server.lua_replicate_commands) {
@@ -1456,13 +1498,16 @@ void evalGenericCommand(client *c, int evalsha) {
             forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
         }
     }
+#endif
 }
 
 void evalCommand(client *c) {
     if (!(c->flags & CLIENT_LUA_DEBUG))
         evalGenericCommand(c,0);
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
     else
         evalGenericCommandWithDebugging(c,0);
+#endif
 }
 
 void evalShaCommand(client *c) {
@@ -1484,6 +1529,7 @@ void evalShaCommand(client *c) {
 
 void scriptCommand(client *c) {
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"help")) {
+#if __redis_unmodified_upstream // Disable the script DEBUG, FLUSH, KILL API of Redis
         const char *help[] = {
 "DEBUG (yes|sync|no) -- Set the debug mode for subsequent scripts executed.",
 "EXISTS <sha1> [<sha1> ...] -- Return information about the existence of the scripts in the script cache.",
@@ -1492,13 +1538,23 @@ void scriptCommand(client *c) {
 "LOAD <script> -- Load a script into the scripts cache, without executing it.",
 NULL
         };
+#endif
+        const char *help[] = {
+                "EXISTS <sha1> [<sha1> ...] -- Return information about the existence of the scripts in the script cache.",
+                "LOAD <script> -- Load a script into the scripts cache, without executing it.",
+                NULL
+        };
         addReplyHelp(c, help);
-    } else if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"flush")) {
+    }
+#if __redis_unmodified_upstream // Disable the script FLUSH API of Redis
+    else if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"flush")) {
         scriptingReset();
         addReply(c,shared.ok);
         replicationScriptCacheFlush();
         server.dirty++; /* Propagating this command is a good idea. */
-    } else if (c->argc >= 2 && !strcasecmp(c->argv[1]->ptr,"exists")) {
+    }
+#endif
+    else if (c->argc >= 2 && !strcasecmp(c->argv[1]->ptr,"exists")) {
         int j;
 
         addReplyMultiBulkLen(c, c->argc-2);
@@ -1513,7 +1569,9 @@ NULL
         if (sha == NULL) return; /* The error was sent by luaCreateFunction(). */
         addReplyBulkCBuffer(c,sha,40);
         forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
-    } else if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"kill")) {
+    }
+#if __redis_unmodified_upstream // Disable the script DEBUG, KILL API of Redis
+    else if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"kill")) {
         if (server.lua_caller == NULL) {
             addReplySds(c,sdsnew("-NOTBUSY No scripts in execution right now.\r\n"));
         } else if (server.lua_caller->flags & CLIENT_MASTER) {
@@ -1543,11 +1601,14 @@ NULL
             addReplyError(c,"Use SCRIPT DEBUG yes/sync/no");
             return;
         }
-    } else {
+    }
+#endif
+    else {
         addReplySubcommandSyntaxError(c);
     }
 }
 
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
 /* ---------------------------------------------------------------------------
  * LDB: Redis Lua debugging facilities
  * ------------------------------------------------------------------------- */
@@ -2447,4 +2508,4 @@ void luaLdbLineHook(lua_State *lua, lua_Debug *ar) {
         server.lua_time_start = mstime();
     }
 }
-
+#endif

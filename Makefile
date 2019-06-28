@@ -5,6 +5,9 @@ default: all
 .DEFAULT:
 	cd src && $(MAKE) $@
 
+wasm:
+	cd src && $(MAKE) -f Makefile_wasm
+
 install:
 	cd src && $(MAKE) $@
 

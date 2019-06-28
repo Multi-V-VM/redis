@@ -316,10 +316,13 @@ void punsubscribeCommand(client *c) {
 
 void publishCommand(client *c) {
     int receivers = pubsubPublishMessage(c->argv[1],c->argv[2]);
+#if __redis_unmodified_upstream // Disable the cluster API of Redis
     if (server.cluster_enabled)
         clusterPropagatePublish(c->argv[1],c->argv[2]);
     else
         forceCommandPropagation(c,PROPAGATE_REPL);
+#endif
+
     addReplyLongLong(c,receivers);
 }
 

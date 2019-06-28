@@ -31,6 +31,7 @@
 
 static void die(const char *fmt, ...)
 {
+#if __redis_unmodified_upstream // Disable a call to exit from libc
     va_list arg;
 
     va_start(arg, fmt);
@@ -39,6 +40,10 @@ static void die(const char *fmt, ...)
     fprintf(stderr, "\n");
 
     exit(-1);
+#else
+    // TODO: enable server logs
+    __builtin_unreachable();
+#endif
 }
 
 void strbuf_init(strbuf_t *s, int len)

@@ -34,7 +34,11 @@
 #define __SDS_H
 
 #define SDS_MAX_PREALLOC (1024*1024)
+#if NOT_WAWSM
 const char *SDS_NOINIT;
+#else
+extern const char *SDS_NOINIT;
+#endif
 
 #include <sys/types.h>
 #include <stdarg.h>

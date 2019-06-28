@@ -41,7 +41,9 @@ void zlibc_free(void *ptr) {
 }
 
 #include <string.h>
+#if __redis_unmodified_upstream // Disable syscalls from some libs
 #include <pthread.h>
+#endif
 #include "config.h"
 #include "zmalloc.h"
 #include "atomicvar.h"
@@ -84,13 +86,17 @@ void zlibc_free(void *ptr) {
 } while(0)
 
 static size_t used_memory = 0;
+#if __redis_unmodified_upstream // Disable mutex usage
 pthread_mutex_t used_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 static void zmalloc_default_oom(size_t size) {
+#if __redis_unmodified_upstream // Disable the debug printing of oom
     fprintf(stderr, "zmalloc: Out of memory trying to allocate %zu bytes\n",
         size);
     fflush(stderr);
     abort();
+#endif
 }
 
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
