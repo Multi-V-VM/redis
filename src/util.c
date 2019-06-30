@@ -540,7 +540,12 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly) {
          * way that is "non surprising" for the user (that is, most small
          * decimal numbers will be represented in a way that when converted
          * back into a string are exactly the same as what the user typed.) */
+#if __redis_unmodified_upstream // using Lf modifier used for long double crashes Redis
         l = snprintf(buf,len,"%.17Lf", value);
+#else
+        const double value_tmp = value;
+        l = snprintf(buf,len,"%lf", value_tmp);
+#endif
         if (l+1 > len) return 0; /* No room. */
         /* Now remove trailing zeroes after the '.' */
         if (strchr(buf,'.') != NULL) {
@@ -552,7 +557,12 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly) {
             if (*p == '.') l--;
         }
     } else {
+#if __redis_unmodified_upstream // using Lf modifier used for long double crashes Redis
         l = snprintf(buf,len,"%.17Lf", value);
+#else
+        const double value_tmp = value;
+        l = snprintf(buf,len,"%lf", value_tmp);
+#endif
         if (l+1 > len) return 0; /* No room. */
     }
     buf[l] = '\0';
