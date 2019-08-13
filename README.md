@@ -32,7 +32,7 @@ wasm2wat redis.wasm -o redis.wat
 ```
 with
 ```wasm
-(func $__wasi_proc_exit (type 0) (param i32) )
+  (func $__wasi_proc_exit (type 0) (param i32) )
   (func $__wasi_fd_close (type 5) (param i32)(result i32)
     i32.const 0
   )
