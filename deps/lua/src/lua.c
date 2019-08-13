@@ -382,6 +382,7 @@ static int pmain (lua_State *L) {
 }
 
 
+#if __redis_unmodified_upstream // Disable main to prevent name conflicts during linking
 int main (int argc, char **argv) {
   int status;
   struct Smain s;
@@ -397,4 +398,4 @@ int main (int argc, char **argv) {
   lua_close(L);
   return (status || s.status) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
-
+#endif

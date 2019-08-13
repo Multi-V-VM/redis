@@ -25,6 +25,14 @@ void deallocate(void *ptr, int size) {
     zfree(ptr);
 }
 
+void store(char *ptr, unsigned char byte) {
+    *ptr = byte;
+}
+
+unsigned char load(const unsigned char *ptr) {
+    return *ptr;
+}
+
 // Cleans client output buffers to - client is blocked and
 // doesn't receive requests until output buffer isn't empty.
 void clean_client_buffer(client *c) {

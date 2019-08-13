@@ -183,6 +183,7 @@ static int pmain(lua_State* L)
  return 0;
 }
 
+#if __redis_unmodified_upstream // Disable main to prevent name conflicts during linking
 int main(int argc, char* argv[])
 {
  lua_State* L;
@@ -198,3 +199,4 @@ int main(int argc, char* argv[])
  lua_close(L);
  return EXIT_SUCCESS;
 }
+#endif

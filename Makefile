@@ -6,7 +6,7 @@ default: all
 	cd src && $(MAKE) $@
 
 wasm:
-	cd src && $(MAKE) -f Makefile_wasm
+	cd src && $(MAKE) -f Makefile_wasm && mv redis.wasm ../
 
 install:
 	cd src && $(MAKE) $@
