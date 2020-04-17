@@ -3,5 +3,6 @@ services:
   redis:
     build:
       context: .
+    container_name: redis_builder
     volumes:
       - .:/code

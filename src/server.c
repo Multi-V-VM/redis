@@ -411,7 +411,7 @@ void serverLogRaw(int level, const char *msg) {
     if (!log_to_stdout) fclose(fp);
     if (server.syslog_enabled) syslog(syslogLevelMap[level], "%s", msg);
 #else
-    wasm_log(msg, strlen(msg));
+    log_utf8_string(msg, strlen(msg));
 
     // increment time
     ustime();

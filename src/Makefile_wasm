@@ -1,24 +1,87 @@
 TARGET = redis
-CC = /opt/wasi-sdk/bin/clang
-SYSROOT = /opt/wasi-sdk/share/wasi-sysroot
-TARGET_TRIPLE = wasm32-unknown-wasi
+CC = /bin/clang
+SYSROOT = /share/wasi-sysroot
+TARGET_TRIPLE = wasm32-wasi
 CFLAGS = -nostartfiles -fvisibility=hidden
 LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
-EXPORT_FUNCS = --export=allocate,--export=deallocate,--export=invoke,--export=load,--export=store,--export=redis_allocate,--export=redis_deallocate,--export=redis_invoke,--export=redis_load,--export=redis_store
 WRAPPER_SRC = wrapper.c
-LUA =/code/deps/lua/src
-REDIS_SERVER = adlist.c quicklist.c debug.c dict.c server.c sds.c zmalloc.c lzf_c.c lzf_d.c pqsort.c zipmap.c sha1.c ziplist.c release.c networking.c util.c object.c db.c t_string.c t_list.c t_set.c t_zset.c t_hash.c multi.c sort.c intset.c crc16.c endianconv.c slowlog.c scripting.c rand.c crc64.c bitops.c notify.c hyperloglog.c latency.c sparkline.c geo.c evict.c expire.c geohash.c geohash_helper.c defrag.c siphash.c rax.c t_stream.c listpack.c lolwut.c lolwut5.c ../deps/lua/src/*.c
-SDK = sdk/logger.c
+LUA = /code/deps/lua/src
+SDK = sdk/syscalls_stubs.c
+
+EXPORT_FUNCS = \
+	--export=allocate,$\
+	--export=deallocate,$\
+	--export=invoke,$\
+	--export=load,$\
+	--export=store,$\
+	--export=redis_allocate,$\
+	--export=redis_deallocate,$\
+	--export=redis_invoke,$\
+	--export=redis_load,$\
+	--export=redis_store
+
+REDIS_SERVER_SRC = \
+	adlist.c\
+	quicklist.c\
+	debug.c\
+	dict.c\
+	server.c\
+	sds.c\
+	zmalloc.c\
+	lzf_c.c\
+	lzf_d.c\
+	pqsort.c\
+	zipmap.c\
+	sha1.c\
+	ziplist.c\
+	release.c\
+	networking.c\
+	util.c\
+	object.c\
+	db.c\
+	t_string.c\
+	t_list.c\
+	t_set.c\
+	t_zset.c\
+	t_hash.c\
+	multi.c\
+	sort.c\
+	intset.c\
+	crc16.c\
+	endianconv.c\
+	slowlog.c\
+	scripting.c\
+	rand.c\
+	crc64.c\
+	bitops.c\
+	notify.c\
+	hyperloglog.c\
+	latency.c\
+	sparkline.c\
+	geo.c\
+	evict.c\
+	expire.c\
+	geohash.c\
+	geohash_helper.c\
+	defrag.c\
+	siphash.c\
+	rax.c\
+	t_stream.c\
+	listpack.c\
+	lolwut.c\
+	lolwut5.c\
+	../deps/lua/src/*.c
 
 .PHONY: default all clean
 
 default: $(TARGET)
 all: default
 
-$(TARGET): $(SDK) $(REDIS_SERVER) $(WRAPPER_SRC)
+$(TARGET): $(SDK) $(REDIS_SERVER_SRC) $(WRAPPER_SRC)
+	./mkreleasehdr.sh
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) -I$(LUA) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
 
 .PRECIOUS: $(TARGET)
 
 clean:
-	-rm -f $(TARGET).wasm
+	-rm -f $(TARGET).wasm $(TARGET).wat
