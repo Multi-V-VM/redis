@@ -21,32 +21,16 @@ void* allocate(size_t size) {
     return zmalloc(size + 1);
 }
 
-void* redis_allocate(size_t size) {
-  return allocate(size);
-}
-
 void deallocate(void *ptr, int size) {
     zfree(ptr);
-}
-
-void redis_deallocate(void *ptr, int size) {
-    deallocate(ptr, size);
 }
 
 void store(char *ptr, unsigned char byte) {
     *ptr = byte;
 }
 
-void redis_store(char *ptr, unsigned char byte) {
-    store(ptr, byte);
-}
-
 unsigned char load(const unsigned char *ptr) {
     return *ptr;
-}
-
-unsigned char redis_load(const unsigned char *ptr) {
-    return load(ptr);
 }
 
 // Cleans client output buffers to - client is blocked and
@@ -144,8 +128,4 @@ const char *invoke(char *request, int request_size) {
     serverLog(LL_DEBUG, "beforeSleep\n");
 
     return response;
-}
-
-const char *redis_invoke(char *request, int request_size) {
-  return invoke(request, request_size);
 }
