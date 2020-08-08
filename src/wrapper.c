@@ -5,6 +5,8 @@
 #include <string.h>
 
 client *g_client;
+char *RESULT_PTR;
+int RESULT_SIZE;
 
 // TODO: add handling of the initialization process errors
 void init() {
@@ -25,8 +27,20 @@ void deallocate(void *ptr, int size) {
     zfree(ptr);
 }
 
-void store(char *ptr, unsigned char byte) {
-    *ptr = byte;
+void set_result_ptr(char *ptr) {
+    *RESULT_PTR = ptr;
+}
+
+void set_result_size(int size) {
+  RESULT_SIZE = size;
+}
+
+int get_result_size(void) {
+  return RESULT_SIZE;
+}
+
+char *get_result_ptr() {
+  return RESULT_PTR;
 }
 
 unsigned char load(const unsigned char *ptr) {
@@ -59,10 +73,10 @@ void clean_client_buffer(client *c) {
 }
 
 char *write_response(client *c, size_t *response_size) {
-    char *response = allocate(c->bufpos + c->reply_bytes + 4);
+    char *response = allocate(c->bufpos + c->reply_bytes);
     *response_size = 0;
 
-    memcpy(response + 4, c->buf, c->bufpos);
+    memcpy(response, c->buf, c->bufpos);
     *response_size += c->bufpos;
 
     while(listLength(c->reply)) {
@@ -74,21 +88,17 @@ char *write_response(client *c, size_t *response_size) {
             continue;
         }
 
-        memcpy(response + 4 + *response_size, o->buf, objlen);
+        memcpy(response + *response_size, o->buf, objlen);
 
         c->reply_bytes -= o->size;
         *response_size += objlen;
         listDelNode(c->reply, listFirst(c->reply));
     }
 
-    for(int i = 0; i < 4; ++i) {
-        response[i] = (*response_size >> 8*i) & 0xFF;
-    }
-
     return response;
 }
 
-const char *invoke(char *request, int request_size) {
+void invoke(char *request, int request_size) {
     serverLog(LL_DEBUG, "invoke started\n");
     if(g_isInited == 0) {
         init();
@@ -119,6 +129,7 @@ const char *invoke(char *request, int request_size) {
             g_client->reply_bytes,
             response_size
             );
+
     clean_client_buffer(g_client);
 
     serverCron();
@@ -127,5 +138,6 @@ const char *invoke(char *request, int request_size) {
     beforeSleep();
     serverLog(LL_DEBUG, "beforeSleep\n");
 
-    return response;
+    RESULT_PTR = response;
+    RESULT_SIZE = response_size;
 }
