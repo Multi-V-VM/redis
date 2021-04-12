@@ -10,7 +10,7 @@ SDK = sdk/syscalls_stubs.c
 
 EXPORT_FUNCS = \
 	--export=allocate,$\
-	--export=deallocate,$\
+	--export=release_objects,$\
 	--export=set_result_size,$\
 	--export=set_result_ptr,$\
 	--export=get_result_size,$\

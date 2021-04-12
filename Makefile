@@ -7,7 +7,7 @@ default: all
 
 wasm:
 	cd src && $(MAKE) -f Makefile_wasm && mv redis.wasm ../
-	~/.cargo/bin/fce embed -i redis.wasm -o redis.wasm -w redis.wit
+	#~/.cargo/bin/fce embed -i redis.wasm -o redis.wasm -w redis.wit
 
 install:
 	cd src && $(MAKE) $@

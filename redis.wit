@@ -1,4 +1,5 @@
 ;; Fluence Redis fork Wasm Interface Types
+(@interface it_version "0.19.0")
 
 ;; allocate
 (@interface type (func (param $size: i32) (result i32)))                ;; 0
@@ -16,7 +17,7 @@
 (@interface type (func (param $result: i32)))                           ;; 4
 
 (@interface export "allocate" (func  0))               ;; 0
-(@interface export "deallocate" (func 1))              ;; 1
+(@interface export "release_objects" (func 1))              ;; 1
 (@interface export "invoke" (func 2))                  ;; 2
 (@interface export "get_result_size" (func 3))         ;; 3
 (@interface export "get_result_ptr" (func 3))          ;; 4
@@ -34,9 +35,7 @@
     call-core 4             ;; call get_result_size
     call-core 3             ;; call get_result_ptr
     string.lift_memory
-    call-core 4             ;; call get_result_size
-    call-core 3             ;; call get_result_ptr
-    call-core 1             ;; call deallocate
+    call-core 1             ;; call release_objects
 )
 
 ;; Implementations

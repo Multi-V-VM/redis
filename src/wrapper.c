@@ -5,7 +5,7 @@
 #include <string.h>
 
 client *g_client;
-char *RESULT_PTR;
+void *RESULT_PTR;
 int RESULT_SIZE;
 
 // TODO: add handling of the initialization process errors
@@ -27,8 +27,14 @@ void deallocate(void *ptr, int size) {
     zfree(ptr);
 }
 
-void set_result_ptr(char *ptr) {
-    *RESULT_PTR = ptr;
+void release_objects() {
+  deallocate(RESULT_PTR, RESULT_SIZE);
+  RESULT_PTR = 0;
+  RESULT_SIZE = 0;
+}
+
+void set_result_ptr(void *ptr) {
+    RESULT_PTR = ptr;
 }
 
 void set_result_size(int size) {
@@ -39,12 +45,8 @@ int get_result_size(void) {
   return RESULT_SIZE;
 }
 
-char *get_result_ptr() {
+void *get_result_ptr() {
   return RESULT_PTR;
-}
-
-unsigned char load(const unsigned char *ptr) {
-    return *ptr;
 }
 
 // Cleans client output buffers to - client is blocked and
@@ -117,7 +119,7 @@ void invoke(char *request, int request_size) {
     } else {
         readQueryFromClient(g_client, 0, request, request_size);
     }
-    deallocate(request, 0);
+    deallocate(request, request_size);
     serverLog(LL_DEBUG, "readQueryFromClient\n");
 
     const size_t reply_bytes_before = g_client->reply_bytes;
