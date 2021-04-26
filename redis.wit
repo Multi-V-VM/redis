@@ -1,5 +1,5 @@
 ;; Fluence Redis fork Wasm Interface Types
-(@interface it_version "0.19.0")
+(@interface it_version "0.20.0")
 
 ;; allocate
 (@interface type (func (param $size: i32) (result i32)))                ;; 0
