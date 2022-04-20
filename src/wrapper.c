@@ -18,9 +18,13 @@ void init() {
 
 int g_isInited = 0;
 
-void* allocate(size_t size) {
-    // allocate one more byte for adding the \n symbol that indicated the end of request
-    return zmalloc(size + 1);
+void* allocate(size_t size, size_t _type_tag) {
+  if (size == 0 || size + 1 == 0) {
+    return 0;
+  }
+
+  // allocate one more byte for adding the \n symbol that indicated the end of request
+  return zmalloc(size + 1);
 }
 
 void deallocate(void *ptr, int size) {
@@ -75,7 +79,7 @@ void clean_client_buffer(client *c) {
 }
 
 char *write_response(client *c, size_t *response_size) {
-    char *response = allocate(c->bufpos + c->reply_bytes);
+    char *response = allocate(c->bufpos + c->reply_bytes, 1);
     *response_size = 0;
 
     memcpy(response, c->buf, c->bufpos);
