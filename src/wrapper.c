@@ -129,3 +129,7 @@ const char *invoke(char *request, int request_size) {
 
     return response;
 }
+
+int main(){
+  invoke("sadfasdfsdafsadfa",100);
+}
