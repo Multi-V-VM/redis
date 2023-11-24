@@ -1,0 +1,3 @@
+#define REDIS_GIT_SHA1 "ae52a708"
+#define REDIS_GIT_DIRTY "29"
+#define REDIS_BUILD_ID "banana-1700378091"
