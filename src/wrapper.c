@@ -89,15 +89,15 @@ char *write_response(client *c, size_t *response_size) {
 }
 
 const char *invoke(char *request, int request_size) {
-    serverLog(LL_DEBUG, "invoke started\n");
+    fprintf(stderr, "invoke started\n");
     if(g_isInited == 0) {
         init();
-        serverLog(LL_DEBUG, "\nserver has been inited\n");
+        fprintf(stderr, "\nserver has been inited\n");
         g_isInited = 1;
     }
 
     afterSleep();
-    serverLog(LL_DEBUG, "afterSleep\n");
+    fprintf(stderr, "afterSleep\n");
 
     if(request_size > 0 && request[request_size - 1] != '\n') {
         // WasmVM always uses allocate function to inject requests to Wasm memory. And it always allocates one more byte
@@ -108,12 +108,12 @@ const char *invoke(char *request, int request_size) {
         readQueryFromClient(g_client, 0, request, request_size);
     }
     deallocate(request, 0);
-    serverLog(LL_DEBUG, "readQueryFromClient\n");
+    fprintf(stderr, "readQueryFromClient\n");
 
     const size_t reply_bytes_before = g_client->reply_bytes;
     size_t response_size = 0;
     const char *response = write_response(g_client, &response_size);
-    serverLog(LL_DEBUG, "write_response, bufpos = %d, reply_bytes before = %d, reply_bytes after = %d, response_size = %d\n",
+    fprintf(stderr, "write_response, bufpos = %d, reply_bytes before = %d, reply_bytes after = %d, response_size = %d\n",
             g_client->bufpos,
             reply_bytes_before,
             g_client->reply_bytes,
@@ -122,10 +122,10 @@ const char *invoke(char *request, int request_size) {
     clean_client_buffer(g_client);
 
     serverCron();
-    serverLog(LL_DEBUG, "serverCron\n");
+    fprintf(stderr, "serverCron\n");
 
     beforeSleep();
-    serverLog(LL_DEBUG, "beforeSleep\n");
+    fprintf(stderr, "beforeSleep\n");
 
     return response;
 }
@@ -133,7 +133,7 @@ const char *invoke(char *request, int request_size) {
 int main(){
     init();
 
-    char * res = invoke("hello",5);
-    printf("%s\n",res);
+    char * res = invoke("h",1);
+    printf("%d\n",res);
     return 0;
 }
