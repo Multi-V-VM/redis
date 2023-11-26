@@ -1263,6 +1263,7 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
 }
 
 /* This is the Lua script "count" hook that we use to detect scripts timeout. */
+#if __redis_unmodified_upstream // Disable the lua debugger API of Redis
 void luaMaskCountHook(lua_State *lua, lua_Debug *ar) {
     long long elapsed = mstime() - server.lua_time_start;
     UNUSED(ar);
@@ -1287,6 +1288,7 @@ void luaMaskCountHook(lua_State *lua, lua_Debug *ar) {
         lua_error(lua);
     }
 }
+#endif
 
 void evalGenericCommand(client *c, int evalsha) {
     lua_State *lua = server.lua;

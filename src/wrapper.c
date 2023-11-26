@@ -1,6 +1,5 @@
-#include <stdlib.h>
-#include "server.h"
 #include "atomicvar.h"
+#include "server.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,22 +15,16 @@ void init() {
 
 int g_isInited = 0;
 
-void* allocate(size_t size) {
+void *allocate(size_t size) {
     // allocate one more byte for adding the \n symbol that indicated the end of request
     return zmalloc(size + 1);
 }
 
-void deallocate(void *ptr, int size) {
-    zfree(ptr);
-}
+void deallocate(void *ptr, int size) { zfree(ptr); }
 
-void store(char *ptr, unsigned char byte) {
-    *ptr = byte;
-}
+void store(char *ptr, unsigned char byte) { *ptr = byte; }
 
-unsigned char load(const unsigned char *ptr) {
-    return *ptr;
-}
+unsigned char load(const unsigned char *ptr) { return *ptr; }
 
 // Cleans client output buffers to - client is blocked and
 // doesn't receive requests until output buffer isn't empty.
@@ -65,7 +58,7 @@ char *write_response(client *c, size_t *response_size) {
     memcpy(response + 4, c->buf, c->bufpos);
     *response_size += c->bufpos;
 
-    while(listLength(c->reply)) {
+    while (listLength(c->reply)) {
         clientReplyBlock *o = listNodeValue(listFirst(c->reply));
         size_t objlen = o->used;
 
@@ -81,8 +74,8 @@ char *write_response(client *c, size_t *response_size) {
         listDelNode(c->reply, listFirst(c->reply));
     }
 
-    for(int i = 0; i < 4; ++i) {
-        response[i] = (*response_size >> 8*i) & 0xFF;
+    for (int i = 0; i < 4; ++i) {
+        response[i] = (*response_size >> 8 * i) & 0xFF;
     }
 
     return response;
@@ -90,7 +83,7 @@ char *write_response(client *c, size_t *response_size) {
 
 const char *invoke(char *request, int request_size) {
     fprintf(stderr, "invoke started\n");
-    if(g_isInited == 0) {
+    if (g_isInited == 0) {
         init();
         fprintf(stderr, "\nserver has been inited\n");
         g_isInited = 1;
@@ -99,7 +92,7 @@ const char *invoke(char *request, int request_size) {
     afterSleep();
     fprintf(stderr, "afterSleep\n");
 
-    if(request_size > 0 && request[request_size - 1] != '\n') {
+    if (request_size > 0 && request[request_size - 1] != '\n') {
         // WasmVM always uses allocate function to inject requests to Wasm memory. And it always allocates one more byte
         // especially for '\n' symbol
         request[request_size] = '\n';
@@ -113,12 +106,9 @@ const char *invoke(char *request, int request_size) {
     const size_t reply_bytes_before = g_client->reply_bytes;
     size_t response_size = 0;
     const char *response = write_response(g_client, &response_size);
-    fprintf(stderr, "write_response, bufpos = %d, reply_bytes before = %d, reply_bytes after = %d, response_size = %d\n",
-            g_client->bufpos,
-            reply_bytes_before,
-            g_client->reply_bytes,
-            response_size
-            );
+    fprintf(stderr,
+            "write_response, bufpos = %d, reply_bytes before = %d, reply_bytes after = %d, response_size = %d\n",
+            g_client->bufpos, reply_bytes_before, g_client->reply_bytes, response_size);
     clean_client_buffer(g_client);
 
     serverCron();
@@ -130,10 +120,14 @@ const char *invoke(char *request, int request_size) {
     return response;
 }
 
-int main(){
+int main() {
     init();
 
-    char * res = invoke("h",1);
-    printf("%d\n",res);
+    char *request = allocate(1);
+    request[0] = 'h';
+    char *res = invoke(request, 1);
+    printf("%d\n", res);
     return 0;
 }
+
+void linuxMemoryWarnings(void) {}

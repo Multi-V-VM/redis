@@ -98,3 +98,5 @@ add_executable(redis
     deps/lua/src/strbuf.c
     src/wrapper.c
 )
+
+target_link_libraries(redis m)
