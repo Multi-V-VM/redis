@@ -1632,7 +1632,7 @@ void initServerConfig(void) {
 #endif
 
     updateCachedTime();
-    getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
+    // getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
     server.runid[CONFIG_RUN_ID_SIZE] = '\0';
 #if __redis_unmodified_upstream // Disable the replication API of Redis
     changeReplicationId();
@@ -4434,7 +4434,7 @@ int initRedis(int argc, char **argv) {
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
 #endif
-    zmalloc_set_oom_handler(redisOutOfMemoryHandler);
+    // zmalloc_set_oom_handler(redisOutOfMemoryHandler);
 #if __redis_unmodified_upstream // Currently it is impossible to get the current time inside a Wasm module
     srand(time(NULL)^getpid());
     gettimeofday(&tv,NULL);
@@ -4443,14 +4443,16 @@ int initRedis(int argc, char **argv) {
 #endif
 
     char hashseed[16];
-    getRandomHexChars(hashseed,sizeof(hashseed));
+    // getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
 #if __redis_unmodified_upstream // Disable the sentinel mode
     server.sentinel_mode = checkForSentinelMode(argc,argv);
 #else
     server.sentinel_mode = 0;
 #endif
+
     initServerConfig();
+
 #if __redis_unmodified_upstream // Disable the argument parsing and module API of Redis
     moduleInitModulesSystem();
 
