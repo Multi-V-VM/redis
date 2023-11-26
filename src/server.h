@@ -342,7 +342,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define LL_NOTICE 2
 #define LL_WARNING 3
 #define LL_RAW (1<<10) /* Modifier to log without timestamp */
-#define CONFIG_DEFAULT_VERBOSITY LL_NOTICE
+#define CONFIG_DEFAULT_VERBOSITY LL_DEBUG
 
 /* Supervision options */
 #define SUPERVISED_NONE 0

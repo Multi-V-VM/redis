@@ -131,5 +131,9 @@ const char *invoke(char *request, int request_size) {
 }
 
 int main(){
-  invoke("sadfasdfsdafsadfa",100);
+    init();
+
+    char * res = invoke("hello",5);
+    printf("%s\n",res);
+    return 0;
 }
