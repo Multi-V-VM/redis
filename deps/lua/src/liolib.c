@@ -182,7 +182,7 @@ static int io_popen (lua_State *L) {
 
 static int io_tmpfile (lua_State *L) {
   FILE **pf = newfile(L);
-  *pf = tmpfile();
+  *pf = fopen("./tmp",2);
   return (*pf == NULL) ? pushresult(L, 0, NULL) : 1;
 }
 
