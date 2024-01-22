@@ -107,7 +107,7 @@ const char *invoke(char *request, int request_size) {
     size_t response_size = 0;
     const char *response = write_response(g_client, &response_size);
     fprintf(stderr,
-            "write_response, bufpos = %d, reply_bytes before = %d, reply_bytes after = %d, response_size = %d\n",
+            "write_response, bufpos = %d, reply_bytes before = %zu, reply_bytes after = %llu, response_size = %zu\n",
             g_client->bufpos, reply_bytes_before, g_client->reply_bytes, response_size);
     clean_client_buffer(g_client);
 
@@ -122,12 +122,14 @@ const char *invoke(char *request, int request_size) {
 
 int main() {
     init();
-
-    char *request = allocate(1);
-    request[0] = 'h';
-    char *res = invoke(request, 1);
-    printf("%d\n", res);
+    int i = 0;
+    while (i < 1e5) {
+        char *request = allocate(1000);
+        char *res = invoke(request, 1000);
+        printf("%s\n", res);
+        deallocate(res, 1000);
+        i++;
+    }
     return 0;
 }
-
-void linuxMemoryWarnings(void) {}
+void linuxMemoryWarnings() {}
