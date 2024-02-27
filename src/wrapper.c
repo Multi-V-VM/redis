@@ -82,15 +82,15 @@ char *write_response(client *c, size_t *response_size) {
 }
 
 const char *invoke(char *request, int request_size) {
-    fprintf(stderr, "invoke started\n");
+    serverLog(LL_DEBUG, "invoke started\n");
     if (g_isInited == 0) {
         init();
-        fprintf(stderr, "\nserver has been inited\n");
+        serverLog(LL_DEBUG, "\nserver has been inited\n");
         g_isInited = 1;
     }
 
     afterSleep();
-    fprintf(stderr, "afterSleep\n");
+    serverLog(LL_DEBUG, "afterSleep\n");
 
     if (request_size > 0 && request[request_size - 1] != '\n') {
         // WasmVM always uses allocate function to inject requests to Wasm memory. And it always allocates one more byte
@@ -101,21 +101,21 @@ const char *invoke(char *request, int request_size) {
         readQueryFromClient(g_client, 0, request, request_size);
     }
     deallocate(request, 0);
-    fprintf(stderr, "readQueryFromClient\n");
+    serverLog(LL_DEBUG, "readQueryFromClient\n");
 
     const size_t reply_bytes_before = g_client->reply_bytes;
     size_t response_size = 0;
     const char *response = write_response(g_client, &response_size);
-    fprintf(stderr,
+    serverLog(LL_DEBUG,
             "write_response, bufpos = %d, reply_bytes before = %zu, reply_bytes after = %llu, response_size = %zu\n",
             g_client->bufpos, reply_bytes_before, g_client->reply_bytes, response_size);
     clean_client_buffer(g_client);
 
     serverCron();
-    fprintf(stderr, "serverCron\n");
+    serverLog(LL_DEBUG, "serverCron\n");
 
     beforeSleep();
-    fprintf(stderr, "beforeSleep\n");
+    serverLog(LL_DEBUG, "beforeSleep\n");
 
     return response;
 }
@@ -123,13 +123,21 @@ const char *invoke(char *request, int request_size) {
 int main() {
     init();
     int i = 0;
-    while (i < 1e5) {
-        char *request = allocate(1000);
-        char *res = invoke(request, 1000);
-        printf("%s\n", res);
-        deallocate(res, 1000);
+
+    while (i < 1000000) {
+        char *request = allocate(256);
+        // Construct the command string dynamically
+        // sprintf(request, "SET key:__rand_int__ xxx");
+        char *data = zmalloc(1024 *1024 *1024 + 1);
+
+        // char *res = invoke(request, 256);
+        sprintf(request, "SET key:__rand_int__ %s\nLPUSH mylist %s\nLRANGE mylist 0 99\nGET key:__rand_int__", data,data);
+        char *res = invoke(request, 256);
+        deallocate(res, 256);
+        deallocate(data, 1024 *1024 *1024 + 1);
         i++;
     }
+
     return 0;
 }
 void linuxMemoryWarnings() {}
